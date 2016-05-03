@@ -1,0 +1,139 @@
+* {
+  padding: 0;
+  margin: 0;
+  background-color: #bbb;
+}
+body {
+  /*display: flex;*/
+  min-height: 100vh;
+}
+header{
+  align-self: flex-start;
+
+}
+h1 {
+  background-color: #888;
+  color: #eee;
+  font-family: "Source Sans Pro";
+  text-transform: uppercase;
+  text-align: center;
+  padding: 20px;
+  margin-bottom: 30px;
+}
+
+#container{
+  display: flex;
+  width: 100%;
+}
+
+/*  /////   CONTROL PANEL   /////  */
+#controls {
+  flex-grow: 1;
+  justify-content: space-around;
+  width: 20%;
+  margin: 10px;
+  border: 2px solid;
+  padding: 10px;
+}
+#volume-control {
+  /*width: 80%;*/
+  /*padding-top: 40px;*/
+  /*display: flex;
+  justify-content: center;*/
+}
+#volume-slider {
+  width: 80%;
+  /*padding-top: 40px;*/
+}
+.placeholder {
+  border: 1px solid;
+  width: 80%;
+  height: 30px;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+/*  /////   SEQUENCER   /////  */
+#sequencer-container{
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 2px solid;
+  align-items: flex-start;
+  margin: 10px;
+  padding: 5px;
+}
+.sequencer {
+  flex-grow: 7;
+  width: 90%;
+  height: auto;
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-start;
+  /*margin:auto;*/
+  /*border: 2px solid;*/
+  /*margin-top: 10px;*/
+  align-items: center;
+  padding: 5px;
+}
+.rhythm-sequencer {
+  background-color: #777;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 7;
+  width: 90%;
+  height: auto;
+  display: flex;
+  justify-content: space-around;
+  padding: 5px;
+  /*margin:auto;*/
+}
+.lead {
+  background-color: #999;
+}
+.bass {
+  background-color: #888;
+}
+.instrument {
+  font-family: "Source Sans Pro";
+  text-transform: uppercase;
+  font-size: 1em;
+  min-width: 3em;
+}
+.pattern-length {
+  background-color: #444;
+  /*min-width: 3em;*/
+  flex-grow: 1;
+}
+
+.drum {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  /*width: 80%;*/
+  background-color: #666;
+}
+
+.cell {
+  border: 1px solid;
+  width: 5%;
+  height: 0;
+  padding-bottom: 5%;    /* Why the hell does this work? */
+  cursor: pointer;
+}
+
+.active{
+  background-color: red;
+}
+
+.playing{
+    background: radial-gradient(#FCFCFC, #E3E3E3, #B6B6B6);
+}
+
+footer {
+  display: flex;
+  align-self: flex-end;
+  background-color: #888;
+  width: 100%;
+  height: 40px;
+}

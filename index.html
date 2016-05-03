@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link href='https://fonts.googleapis.com/css?family=Source+Sans+Pro' rel='stylesheet' type='text/css'>
+  <!-- <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css"> -->
+  <link rel="stylesheet" href="style.css">
+  <script src="https://code.jquery.com/jquery-2.2.3.min.js" integrity="sha256-a23g1Nt4dtEYOj7bR+vTu7+T8VP13humZFBJNIYoEJo=" crossorigin="anonymous"></script>
+  <script src="http://www.html5rocks.com/en/tutorials/webaudio/intro/js/buffer-loader.js"></script>
+  <script src="https://connect.soundcloud.com/sdk/sdk-3.0.0.js"></script>
+  <script>
+    SC.initialize({
+      client_id: 'ddafe9707aafb3e808ddc08c4e76f88a',
+      redirect_uri: 'http://example.com/callback'
+    });
+  </script>
+  <title>Polyphemus</title>
+</head>
+<body>
+  <header>
+    <h1>Polyphemus</h1>
+  </header>
+  <div id="samplesLoading">
+    Samples Loading
+  </div>
+  <div id="container">
+    <div id="controls">
+      <div id="volume-control">
+        <input type="range" name="" id="volume-slider" min="0" max="1" step=".01">
+      </div>
+      <label for="play"></label>
+      <input type="button" name="play" value="PLAY" id="play-pause">
+      <label for="tempo"></label>
+      <input type="button" name="tempo" value="STOP" id="stop">
+      <div class="placeholder" id="tempoControl">Tempo Control</div>
+      <div class="placeholder">Scale Selection</div>
+      <div class="placeholder">Kit Selection</div>
+      <div class="placeholder" id="soundcloudRecordStart">Record Start</div>
+      <div class="placeholder" id="soundcloudRecordStop">Record Stop</div>
+
+      <!-- <div class="placeholder"></div>
+      <div class="placeholder"></div>
+      <div class="placeholder"></div>
+      <div class="placeholder"></div>
+      <div class="placeholder"></div> -->
+    </div>
+    <div id="sequencer-container">
+      <div id="lead" class="sequencer lead">
+        <div class="instrument lead" data-instrument="lead">lead</div>
+        <div class="cell column_0"></div>
+        <div class="cell column_1"></div>
+        <div class="cell column_2"></div>
+        <div class="cell column_3"></div>
+        <div class="cell column_4"></div>
+        <div class="cell column_5"></div>
+        <div class="cell column_6"></div>
+        <div class="cell column_7"></div>
+        <div class="cell column_8"></div>
+        <div class="cell column_9"></div>
+        <div class="cell column_10"></div>
+        <div class="cell column_11"></div>
+        <div class="cell column_12"></div>
+        <div class="cell column_13"></div>
+        <div class="cell column_14"></div>
+        <div class="cell column_15"></div>
+        <div class="cell pattern-length"></div>
+      </div>
+      <div id="bass" class="sequencer bass">
+        <div class="instrument bass" data-instrument="bass">bass</div>
+        <div class="cell column_0"></div>
+        <div class="cell column_1"></div>
+        <div class="cell column_2"></div>
+        <div class="cell column_3"></div>
+        <div class="cell column_4"></div>
+        <div class="cell column_5"></div>
+        <div class="cell column_6"></div>
+        <div class="cell column_7"></div>
+        <div class="cell column_8"></div>
+        <div class="cell column_9"></div>
+        <div class="cell column_10"></div>
+        <div class="cell column_11"></div>
+        <div class="cell column_12"></div>
+        <div class="cell column_13"></div>
+        <div class="cell column_14"></div>
+        <div class="cell column_15"></div>
+        <div class="cell pattern-length"></div>
+      </div>
+      <div id="rhythm" class="rhythm-sequencer">
+        <div id="closedhat" class="drum">
+          <div class="instrument drum" data-instrument="hat">hi hat</div>
+          <div class="cell column_0 hat"></div>
+          <div class="cell column_1 hat"></div>
+          <div class="cell column_2 hat"></div>
+          <div class="cell column_3 hat"></div>
+          <div class="cell column_4 hat"></div>
+          <div class="cell column_5 hat"></div>
+          <div class="cell column_6 hat"></div>
+          <div class="cell column_7 hat"></div>
+          <div class="cell column_8 hat"></div>
+          <div class="cell column_9 hat"></div>
+          <div class="cell column_10 hat"></div>
+          <div class="cell column_11 hat"></div>
+          <div class="cell column_12 hat"></div>
+          <div class="cell column_13 hat"></div>
+          <div class="cell column_14 hat"></div>
+          <div class="cell column_15 hat"></div>
+          <div class="cell pattern-length"></div>
+        </div>
+        <div id="snare" class="drum">
+          <div class="instrument drum snare" data-instrument="snare">snare</div>
+          <div class="cell column_0 snare"></div>
+          <div class="cell column_1 snare"></div>
+          <div class="cell column_2 snare"></div>
+          <div class="cell column_3 snare"></div>
+          <div class="cell column_4 snare"></div>
+          <div class="cell column_5 snare"></div>
+          <div class="cell column_6 snare"></div>
+          <div class="cell column_7 snare"></div>
+          <div class="cell column_8 snare"></div>
+          <div class="cell column_9 snare"></div>
+          <div class="cell column_10 snare"></div>
+          <div class="cell column_11 snare"></div>
+          <div class="cell column_12 snare"></div>
+          <div class="cell column_13 snare"></div>
+          <div class="cell column_14 snare"></div>
+          <div class="cell column_15 snare"></div>
+          <div class="cell pattern-length"></div>
+        </div>
+        <div id="kick" class="drum">
+          <div class="instrument drum kick" data-instrument="kick">kick</div>
+          <div class="cell column_0 kick"></div>
+          <div class="cell column_1 kick"></div>
+          <div class="cell column_2 kick"></div>
+          <div class="cell column_3 kick"></div>
+          <div class="cell column_4 kick"></div>
+          <div class="cell column_5 kick"></div>
+          <div class="cell column_6 kick"></div>
+          <div class="cell column_7 kick"></div>
+          <div class="cell column_8 kick"></div>
+          <div class="cell column_9 kick"></div>
+          <div class="cell column_10 kick"></div>
+          <div class="cell column_11 kick"></div>
+          <div class="cell column_12 kick"></div>
+          <div class="cell column_13 kick"></div>
+          <div class="cell column_14 kick"></div>
+          <div class="cell column_15 kick"></div>
+          <div class="cell pattern-length"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <footer></footer>
+  <script type="text/javascript" src="app.js"></script>
+  <script src="https://code.jquery.com/jquery-2.2.3.min.js" integrity="sha256-a23g1Nt4dtEYOj7bR+vTu7+T8VP13humZFBJNIYoEJo=" crossorigin="anonymous"></script>
+</body>
+</html>
