@@ -5,38 +5,36 @@
   <link href='https://fonts.googleapis.com/css?family=Source+Sans+Pro' rel='stylesheet' type='text/css'>
   <!-- <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css"> -->
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.2/css/font-awesome.min.css">
   <script src="https://code.jquery.com/jquery-2.2.3.min.js" integrity="sha256-a23g1Nt4dtEYOj7bR+vTu7+T8VP13humZFBJNIYoEJo=" crossorigin="anonymous"></script>
   <script src="http://www.html5rocks.com/en/tutorials/webaudio/intro/js/buffer-loader.js"></script>
-  <script src="https://connect.soundcloud.com/sdk/sdk-3.0.0.js"></script>
-  <script>
-    SC.initialize({
-      client_id: 'ddafe9707aafb3e808ddc08c4e76f88a',
-      redirect_uri: 'http://example.com/callback'
-    });
-  </script>
+
   <title>Polyphemus</title>
 </head>
 <body>
   <header>
     <h1>Polyphemus</h1>
+    <h2>a polyrhythmic step-sequencer</h2>
   </header>
   <div id="samplesLoading">
     Samples Loading
   </div>
-  <div id="container">
-    <div id="controls">
+  <div class="container">
+    <div id="controls-container">
       <div id="volume-control">
-        <input type="range" name="" id="volume-slider" min="0" max="1" step=".01">
+        <label for="volume" id="volume">VOLUME</label>
+        <input type="range" name="volume" id="volume-slider" min="0" max="1" step=".01">
       </div>
       <label for="play"></label>
-      <input type="button" name="play" value="PLAY" id="play-pause">
-      <label for="tempo"></label>
-      <input type="button" name="tempo" value="STOP" id="stop">
+      <div class="placeholder" id="play-stop"><i class="fa fa-play" aria-hidden="true" id="playPlay"><i class="fa fa-stop" aria-hidden="true" id="playStop"></i>
+</i></div>
+      <!-- <label for="tempo"></label>
+      <input type="button" name="tempo" value="STOP" id="stop"> -->
       <div class="placeholder" id="tempoControl">Tempo Control</div>
-      <div class="placeholder">Scale Selection</div>
-      <div class="placeholder">Kit Selection</div>
-      <div class="placeholder" id="soundcloudRecordStart">Record Start</div>
-      <div class="placeholder" id="soundcloudRecordStop">Record Stop</div>
+      <div class="placeholder">Reset</div>
+      <div class="placeholder">Change Lead</div>
+      <div class="placeholder" id="">Change Bass</div>
+      <div class="placeholder" id="">Change Drum Kit</div>
 
       <!-- <div class="placeholder"></div>
       <div class="placeholder"></div>
@@ -63,7 +61,26 @@
         <div class="cell column_13"></div>
         <div class="cell column_14"></div>
         <div class="cell column_15"></div>
-        <div class="cell pattern-length"></div>
+        <div class="pattern-length">
+          <select name="" id="leadLength">
+            <option value="0">01</option>
+            <option value="1">02</option>
+            <option value="2">03</option>
+            <option value="3">04</option>
+            <option value="4">05</option>
+            <option value="5">06</option>
+            <option value="6">07</option>
+            <option value="7">08</option>
+            <option value="8">09</option>
+            <option value="9">10</option>
+            <option value="10">11</option>
+            <option value="11">12</option>
+            <option value="12">13</option>
+            <option value="13">14</option>
+            <option value="14">15</option>
+            <option value="15" selected="selected">16</option>
+          </select>
+        </div>
       </div>
       <div id="bass" class="sequencer bass">
         <div class="instrument bass" data-instrument="bass">bass</div>
@@ -83,7 +100,26 @@
         <div class="cell column_13"></div>
         <div class="cell column_14"></div>
         <div class="cell column_15"></div>
-        <div class="cell pattern-length"></div>
+        <div class="pattern-length">
+          <select name="" id="bassLength">
+            <option value="0">01</option>
+            <option value="1">02</option>
+            <option value="2">03</option>
+            <option value="3">04</option>
+            <option value="4">05</option>
+            <option value="5">06</option>
+            <option value="6">07</option>
+            <option value="7">08</option>
+            <option value="8">09</option>
+            <option value="9">10</option>
+            <option value="10">11</option>
+            <option value="11">12</option>
+            <option value="12">13</option>
+            <option value="13">14</option>
+            <option value="14">15</option>
+            <option value="15" selected="selected">16</option>
+          </select>
+        </div>
       </div>
       <div id="rhythm" class="rhythm-sequencer">
         <div id="closedhat" class="drum">
@@ -104,7 +140,26 @@
           <div class="cell column_13 hat"></div>
           <div class="cell column_14 hat"></div>
           <div class="cell column_15 hat"></div>
-          <div class="cell pattern-length"></div>
+          <div class="pattern-length">
+            <select name="" id="hatLength">
+              <option value="0">01</option>
+              <option value="1">02</option>
+              <option value="2">03</option>
+              <option value="3">04</option>
+              <option value="4">05</option>
+              <option value="5">06</option>
+              <option value="6">07</option>
+              <option value="7">08</option>
+              <option value="8">09</option>
+              <option value="9">10</option>
+              <option value="10">11</option>
+              <option value="11">12</option>
+              <option value="12">13</option>
+              <option value="13">14</option>
+              <option value="14">15</option>
+              <option value="15" selected="selected">16</option>
+            </select>
+          </div>
         </div>
         <div id="snare" class="drum">
           <div class="instrument drum snare" data-instrument="snare">snare</div>
@@ -124,7 +179,26 @@
           <div class="cell column_13 snare"></div>
           <div class="cell column_14 snare"></div>
           <div class="cell column_15 snare"></div>
-          <div class="cell pattern-length"></div>
+          <div class="pattern-length">
+            <select name="" id="snareLength">
+              <option value="0">01</option>
+              <option value="1">02</option>
+              <option value="2">03</option>
+              <option value="3">04</option>
+              <option value="4">05</option>
+              <option value="5">06</option>
+              <option value="6">07</option>
+              <option value="7">08</option>
+              <option value="8">09</option>
+              <option value="9">10</option>
+              <option value="10">11</option>
+              <option value="11">12</option>
+              <option value="12">13</option>
+              <option value="13">14</option>
+              <option value="14">15</option>
+              <option value="15" selected="selected">16</option>
+            </select>
+          </div>
         </div>
         <div id="kick" class="drum">
           <div class="instrument drum kick" data-instrument="kick">kick</div>
@@ -144,14 +218,79 @@
           <div class="cell column_13 kick"></div>
           <div class="cell column_14 kick"></div>
           <div class="cell column_15 kick"></div>
-          <div class="cell pattern-length"></div>
+          <div class="pattern-length">
+            <select name="" id="kickLength">
+              <option value="0">01</option>
+              <option value="1">02</option>
+              <option value="2">03</option>
+              <option value="3">04</option>
+              <option value="4">05</option>
+              <option value="5">06</option>
+              <option value="6">07</option>
+              <option value="7">08</option>
+              <option value="8">09</option>
+              <option value="9">10</option>
+              <option value="10">11</option>
+              <option value="11">12</option>
+              <option value="12">13</option>
+              <option value="13">14</option>
+              <option value="14">15</option>
+              <option value="15" selected="selected">16</option>
+            </select>
+          </div>
         </div>
       </div>
+    </div>
 
+  </div>
+  <div class="container">
+    <div id="bottomBox1">
+
+      <div id="states"></div>
+      <!-- <div id="putTheWidgetHere"> -->
+      <iframe id="soundcloud" width="100%" height="146px" scrolling="no" frameborder="no" src=""></iframe>
+    </div>
+    <!-- </div> -->
+    <div id="savePanel" class="bottomBox2">
+      <div class="bottomBoxPanel2">
+        <div class="savePattern" id="savePattern1">Pattern 1</div>
+        <div class="savePattern" id="savePattern2">Pattern 2</div>
+        <div class="savePattern" id="savePattern3">Pattern 3</div>
+        <div class="savePattern" id="savePattern4">Pattern 4</div>
+      </div>
+    </div>
+    <div id="loadPanel" class="bottomBox2">
+      <div class="bottomBoxPanel2">
+        <div class="loadPattern" id="loadPattern1">Pattern 1</div>
+        <div class="loadPattern" id="loadPattern2">Pattern 2</div>
+        <div class="loadPattern" id="loadPattern3">Pattern 3</div>
+        <div class="loadPattern" id="loadPattern4">Pattern 4</div>
+      </div>
+    </div>
+    <div id="recordPanel" class="bottomBox2">
+      <div class="bottomBoxPanel2">
+        <div class="loadPattern" id="recordStart">Record</div>
+        <div class="loadPattern" id="recordStop">Stop</div>
+      </div>
+    </div>
+    <div id="bottomBox3">
+      <div class="bottomBoxPanel3">
+        <div id="save" class="selectedPanel">Save</div>
+        <div id="load" class="deselectedPanel">Load</div>
+        <div id="record" class="deselectedPanel">Record</div>
+      </div>
     </div>
   </div>
   <footer></footer>
-  <script type="text/javascript" src="app.js"></script>
   <script src="https://code.jquery.com/jquery-2.2.3.min.js" integrity="sha256-a23g1Nt4dtEYOj7bR+vTu7+T8VP13humZFBJNIYoEJo=" crossorigin="anonymous"></script>
+  <script src="https://connect.soundcloud.com/sdk/sdk-3.0.0.js"></script>
+  <script>
+    SC.initialize({
+      client_id: 'ddafe9707aafb3e808ddc08c4e76f88a',
+      redirect_uri: 'http://ziopads-form.s3-website-us-east-1.amazonaws.com/callback.html'
+    });
+  </script>
+  <script type="text/javascript" src="app.js"></script>
+  <!-- <script type="text/javascript" src="recorderjs/recorder.js"></script> -->
 </body>
 </html>
