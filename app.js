@@ -23,9 +23,7 @@ var bufferLoader;
 var instruments = ['lead','bass','closedhat','snare','kick']
 var currentState = {};
 
-if (window.hasOwnProperty('AudioContext') && !window.hasOwnProperty('webkitAudioContext')) {
-  window.webkitAudioContext = AudioContext;
-}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////      DOCUMENT READY       /////////////////////////////////////////
@@ -42,12 +40,15 @@ $(document).ready(function() {
       source: gain
   };
   recorder = new SC.Recorder(recorderObj);
-  // upload = new SC.upload();
+  upload = new SC.upload();
 })
 
 function init() {
-  // context = new webkitAudioContext();
-  context = new AudioContext();
+  // if (window.hasOwnProperty('AudioContext') && !window.hasOwnProperty('webkitAudioContext')) {
+  //   window.webkitAudioContext = AudioContext;
+  // }
+  context = new webkitAudioContext();
+  // context = new AudioContext();
   context.number
   gain = context.createGain();
   gain.connect(context.destination);
@@ -71,9 +72,6 @@ function finishedLoading(bufferList) {
   hatBuffer = bufferList[2];
   leadBuffer = bufferList[3];
   bassBuffer = bufferList[4];
-  console.log('kick' + kickBuffer);
-  console.log('lead' + leadBuffer);
-  console.log('bass' + bassBuffer);
   $('#samplesLoading').hide();
   $('#container').show();
 }
@@ -89,36 +87,33 @@ SC.initialize({
 ////////////      SOUNDCLOUD RECORDER       ////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////$('#recordStart').click(function(){
 $('#recordStart').click(function(){
-  if (!SCConnected) {
-    SC.connect().then(function(){
-      return SC.get('/me');
-    }).then(function(user){
-        SCConnected = true;
-        recorder.start();
-    }).catch(function(error){
-      alert('Error: ' + error.message);
-    });
-  } else {
+  // if (!SCConnected) {
+  //   SC.connect().then(function(){
+  //     return SC.get('/me');
+  //   }).then(function(user){
+  //       SCConnected = true;
+  //       recorder.start();
+  //   }).catch(function(error){
+  //     alert('Error: ' + error.message);
+  //   });
+  // } else {
+    $('#recordDisplay').addClass('loader-inner line-scale-party');
     recorder.start();
-  }
+  // }
 });
 
 $('#recordStop').click(function(){
-  $('#states').removeClass('unprocessed').addClass('loader-inner ball-pulse');
+  $('#states').addClass('loader-inner line-scale-party');
+  $('#recordDisplay').removeClass('loader-inner line-scale-party');
   console.log('Recording stopped');
   recorder.stop();
   // recorder.play();
   var theBlob = recorder.getWAV();
   recorder.saveAs('myDopeJam');
-  // var options = {
-  //   file: blob
-  // }
-
-
-  // SC.upload(recorder.getWAV());
-
 
   recorder.getWAV().then(function(blob) {
+      $('#states').show();
+      $('#soundcloud').hide();
       console.log('blob');
       SC.upload({
         asset_data: blob,
@@ -136,10 +131,11 @@ $('#recordStop').click(function(){
             if (result.state === "failed" || result.state === "finished") {
               var src = "https://w.soundcloud.com/player/?url=" + track.secret_uri + "&amp;color=bbbbbb&amp;auto_play=false&amp;hide_related=false&amp;show_comments=true&amp;show_user=true&amp;show_reposts=false"
 
-              // console.log('uploaded', track);
+              console.log('uploaded', track);
               $('#soundcloud').attr('src', src);
               $('#states').hide();
-              $('#soundcloud').show();       }
+              $('#soundcloud').show();
+            }
             clearInterval(checkProcessed);
           })
         },3000)
@@ -169,7 +165,7 @@ function playSound(sourceBuffer) {
 }
 
 function playStopListener() {
-  $('#play-stop').click(function(e) {
+  $('.playStop').click(function(e) {
     if ($(e.target).hasClass('fa-play')) {
       // $(e.target).removeClass('fa-play').addClass('fa-stop');
       startPlay();
@@ -181,11 +177,11 @@ function playStopListener() {
   });
 }
 
-function stopListener(){
-  $('#play-stop').click(function(){
-    stopPlay();
-  })
-}
+// function stopListener(){
+//   $('#play-stop').click(function(){
+//     stopPlay();
+//   })
+// }
 
 function startPlay(event) {
   playIndex = 0;

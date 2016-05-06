@@ -3,8 +3,8 @@ html,
 body {
   height: 100%;
   font-size: 16px;
-  background: #ed5565;
-  color: #fff;
+  /*background: #ed5565;*/
+  /*color: #eee;*/
   font-family: 'Source Sans Pro'; }
 
 /* line 14, stdin */
@@ -61,6 +61,8 @@ main {
             flex-wrap: wrap; }
     /* line 66, stdin */
     main .loaders .loader {
+      color: #eee;
+
       box-sizing: border-box;
       display: -webkit-flex;
       display: -ms-flexbox;
@@ -111,9 +113,9 @@ main {
  */
 /* line 104, stdin */
 .btn {
-  color: #fff;
+  color: #eee;
   padding: .75rem 1.25rem;
-  border: 2px solid #fff;
+  border: 2px solid #eee;
   border-radius: 4px;
   text-decoration: none;
   transition: -webkit-transform .1s ease-out, border .1s ease-out, background-color .15s ease-out, color .1s ease-out;
@@ -123,5 +125,5 @@ main {
   .btn:hover {
     -webkit-transform: scale(1.01562);
             transform: scale(1.01562);
-    background-color: #fff;
+    background-color: #eee;
     color: #ed5565; }

@@ -30,7 +30,7 @@
         <input type="range" name="volume" id="volume-slider" min="0" max="1" step=".01">
       </div>
       <label for="play"></label>
-      <div class="placeholder" id="play-stop"><i class="fa fa-play" aria-hidden="true" id="playPlay"><i class="fa fa-stop" aria-hidden="true" id="playStop"></i>
+      <div class="placeholder" id="play-stop"><i class="fa fa-play playStop" aria-hidden="true"></i>
 </i></div>
       <!-- <label for="tempo"></label>
       <input type="button" name="tempo" value="STOP" id="stop"> -->
@@ -249,7 +249,7 @@
   </div>
   <div class="container">
     <div id="bottomBox1">
-        <div id="states" class="loader-inner line-scale">
+        <div id="states" class="unprocessed">
           <div></div>
           <div></div>
           <div></div>
@@ -259,7 +259,7 @@
       <!-- <div id="processing">Processing...</div> -->
       <iframe id="soundcloud" width="100%" height="146px" scrolling="no" frameborder="no" src=""></iframe>
     </div>
-a
+
     <!-- <div class="bottomBox23"> -->
       <div id="savePanel" class="bottomBox2">
         <div class="bottomBoxPanel2">
@@ -281,7 +281,13 @@ a
         <div class="bottomBoxPanel2">
           <div class="recordPattern" id="recordStart">Record</div>
           <div class="recordPattern" id="recordStop">Stop</div>
-          <div class="recordPattern" id="recordDisplay"></div>
+          <div class="recordPattern" id="recordDisplay">
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+          </div>
         </div>
       </div>
       <div id="bottomBox3">

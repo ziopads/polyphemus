@@ -1,12 +1,13 @@
 * {
   padding: 0;
   margin: 0;
-  background-color: #bbb;
 }
 body {
   /*display: flex;*/
   min-height: 100vh;
   max-height: 100vh;
+  background-color: #bbb;
+
 }
 header{
   align-self: flex-start;
@@ -43,6 +44,7 @@ h2{
   width: 20%;
   margin: 10px;
   border: 2px solid;
+  border-color: #444;
   padding: 5px;
 }
 #volume-control {
@@ -97,6 +99,7 @@ h2{
   flex-direction: column;
   width: 100%;
   border: 2px solid;
+  border-color: #444;
   align-items: flex-start;
   margin: 10px;
   margin-left: 0;
@@ -174,6 +177,7 @@ select{
 
 .cell {
   border: 1px solid;
+  background-color: #bbb;
   width: 5%;
   height: 0;
   padding-bottom: 5%;    /* Why the hell does this work? */
@@ -192,6 +196,7 @@ select{
   box-sizing: border-box;
   clear: both;
   border: 2px solid;
+  border-color: #444;
   width: 60%;
   height: 160px;
   margin-top: 0;
@@ -212,6 +217,7 @@ select{
   /*padding:10px;*/
   /*clear: both;*/
   border: 2px solid;
+  border-color: #444;
   border-right: 0;
   width: 30%;
   height: 160px;
@@ -265,6 +271,7 @@ select{
   /*padding:10px;*/
   /*clear: both;*/
   border: 2px solid;
+  border-color: #444;
   border-left: 0;
   width: 10%;
   height: 160px;
@@ -404,17 +411,21 @@ select{
 #states{
   clear: both;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
   width: 100%;
   margin-left: 10px;
   margin: 5px;
 }
 .unprocessed{
-  background-color: #444;
+  background-color: #777;
 }
-.processing{
-  background-color: #888;
+.loader-inner line-scale-party{
+  background-color: #777;
+  /*align-self: center;*/
 }
+
 #save{
   /*background-color: #888;*/
   width:100%;
@@ -452,6 +463,12 @@ select{
   text-align: center;
   padding-top: 10%;
   /*border:2px solid;*/
+}
+#recordDisplay{
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
 }
 #savePanel{
   display:
