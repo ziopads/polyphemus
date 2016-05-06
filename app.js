@@ -22,11 +22,10 @@ var bufferLoader;
 
 var instruments = ['lead','bass','closedhat','snare','kick']
 var currentState = {};
-// var recorder = new SC.Recorder();
 
-// if (window.hasOwnProperty('AudioContext') && !window.hasOwnProperty('webkitAudioContext')) {
-//   window.webkitAudioContext = AudioContext;
-// }
+if (window.hasOwnProperty('AudioContext') && !window.hasOwnProperty('webkitAudioContext')) {
+  window.webkitAudioContext = AudioContext;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////      DOCUMENT READY       /////////////////////////////////////////
@@ -57,7 +56,9 @@ function init() {
     [
       '../kick.wav',
       '../snare.wav',
-      '../closedhat.wav'
+      '../closedhat.wav',
+      '../lead.wav',
+      '../bass.wav'
     ],
     finishedLoading
     );
@@ -68,6 +69,11 @@ function finishedLoading(bufferList) {
   kickBuffer = bufferList[0];
   snareBuffer = bufferList[1];
   hatBuffer = bufferList[2];
+  leadBuffer = bufferList[3];
+  bassBuffer = bufferList[4];
+  console.log('kick' + kickBuffer);
+  console.log('lead' + leadBuffer);
+  console.log('bass' + bassBuffer);
   $('#samplesLoading').hide();
   $('#container').show();
 }
@@ -98,6 +104,7 @@ $('#recordStart').click(function(){
 });
 
 $('#recordStop').click(function(){
+  $('#states').removeClass('unprocessed').addClass('loader-inner ball-pulse');
   console.log('Recording stopped');
   recorder.stop();
   // recorder.play();
@@ -209,6 +216,12 @@ function schedule() {
         if ($(this).hasClass("active") && $(this).hasClass("hat")) {
             playSound(hatBuffer);
           }
+        if ($(this).hasClass("active") && $(this).hasClass("lead")) {
+            playSound(leadBuffer);
+          }
+        if ($(this).hasClass("active") && $(this).hasClass("bass")) {
+            playSound(bassBuffer);
+          }
 
       })
     if (noteTime != lastDrawTime) {
@@ -262,6 +275,14 @@ document.getElementById('volume-slider').addEventListener('change', function(){
 ////////////////////////////////////////////////////////////////////////////////
 ////////////      EVENT LISTENERS TO ACTIVATE/DEACTIVATE CELLS       ///////////
 ////////////////////////////////////////////////////////////////////////////////
+function reset(){
+  $('.cell').removeClass('active');
+}
+
+$('#reset').click(function(){
+  reset();
+});
+
 var cells = document.getElementsByClassName('cell');
 
 for (var i = 0; i < cells.length; i++) {
@@ -329,10 +350,6 @@ function loadState(pattern){
   }
 }
 
-// localStorage.pattern1 = {};
-// localStorage.pattern2 = {};
-// localStorage.pattern3 = {};
-// localStorage.pattern4 = {};
 ////////////////////////////////////////////////////////////////////////////////
 ////////////      EVENT LISTENERS FOR BOTTOM PANEL       ///////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -371,6 +388,14 @@ $('#record').click(function(){
   $('#record').addClass('selectedPanel');
   $('#record').removeClass('deselectedPanel');
   console.log('record');
+  // $('#recordStart').click(function(){
+    if (!SCConnected) {
+      SC.connect().then(function(){
+        return SC.get('/me');
+      }).then(function(user){
+          SCConnected = true;
+      })
+    }
 });
 
 $('#savePattern1').click(function(){

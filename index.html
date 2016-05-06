@@ -3,8 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <link href='https://fonts.googleapis.com/css?family=Source+Sans+Pro' rel='stylesheet' type='text/css'>
+  <link href='https://fonts.googleapis.com/css?family=Open+Sans|Arimo:700&subset=latin,greek' rel='stylesheet' type='text/css'>
+  <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:600,300" rel="stylesheet" type="text/css">
   <!-- <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css"> -->
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" type="text/css" href="loaders.min.css">
+  <link rel="stylesheet" type="text/css" href="loaders.css">
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.2/css/font-awesome.min.css">
   <script src="https://code.jquery.com/jquery-2.2.3.min.js" integrity="sha256-a23g1Nt4dtEYOj7bR+vTu7+T8VP13humZFBJNIYoEJo=" crossorigin="anonymous"></script>
   <script src="http://www.html5rocks.com/en/tutorials/webaudio/intro/js/buffer-loader.js"></script>
@@ -13,7 +17,7 @@
 </head>
 <body>
   <header>
-    <h1>Polyphemus</h1>
+    <h1>ΠΟΛΎΦΗΜΟΣ</h1>
     <h2>a polyrhythmic step-sequencer</h2>
   </header>
   <div id="samplesLoading">
@@ -31,8 +35,8 @@
       <!-- <label for="tempo"></label>
       <input type="button" name="tempo" value="STOP" id="stop"> -->
       <div class="placeholder" id="tempoControl">Tempo Control</div>
-      <div class="placeholder">Reset</div>
-      <div class="placeholder">Change Lead</div>
+      <div class="placeholder" id="reset">Reset</div>
+      <div class="placeholder" id="">Change Lead</div>
       <div class="placeholder" id="">Change Bass</div>
       <div class="placeholder" id="">Change Drum Kit</div>
 
@@ -43,24 +47,24 @@
       <div class="placeholder"></div> -->
     </div>
     <div id="sequencer-container">
-      <div id="lead" class="sequencer lead">
-        <div class="instrument lead" data-instrument="lead">lead</div>
-        <div class="cell column_0"></div>
-        <div class="cell column_1"></div>
-        <div class="cell column_2"></div>
-        <div class="cell column_3"></div>
-        <div class="cell column_4"></div>
-        <div class="cell column_5"></div>
-        <div class="cell column_6"></div>
-        <div class="cell column_7"></div>
-        <div class="cell column_8"></div>
-        <div class="cell column_9"></div>
-        <div class="cell column_10"></div>
-        <div class="cell column_11"></div>
-        <div class="cell column_12"></div>
-        <div class="cell column_13"></div>
-        <div class="cell column_14"></div>
-        <div class="cell column_15"></div>
+      <div id="lead" class="sequencer leadRow">
+        <div class="instrument leadRow" data-instrument="lead">lead</div>
+        <div class="cell column_0 lead"></div>
+        <div class="cell column_1 lead"></div>
+        <div class="cell column_2 lead"></div>
+        <div class="cell column_3 lead"></div>
+        <div class="cell column_4 lead"></div>
+        <div class="cell column_5 lead"></div>
+        <div class="cell column_6 lead"></div>
+        <div class="cell column_7 lead"></div>
+        <div class="cell column_8 lead"></div>
+        <div class="cell column_9 lead"></div>
+        <div class="cell column_10 lead"></div>
+        <div class="cell column_11 lead"></div>
+        <div class="cell column_12 lead"></div>
+        <div class="cell column_13 lead"></div>
+        <div class="cell column_14 lead"></div>
+        <div class="cell column_15 lead"></div>
         <div class="pattern-length">
           <select name="" id="leadLength">
             <option value="0">01</option>
@@ -82,24 +86,24 @@
           </select>
         </div>
       </div>
-      <div id="bass" class="sequencer bass">
-        <div class="instrument bass" data-instrument="bass">bass</div>
-        <div class="cell column_0"></div>
-        <div class="cell column_1"></div>
-        <div class="cell column_2"></div>
-        <div class="cell column_3"></div>
-        <div class="cell column_4"></div>
-        <div class="cell column_5"></div>
-        <div class="cell column_6"></div>
-        <div class="cell column_7"></div>
-        <div class="cell column_8"></div>
-        <div class="cell column_9"></div>
-        <div class="cell column_10"></div>
-        <div class="cell column_11"></div>
-        <div class="cell column_12"></div>
-        <div class="cell column_13"></div>
-        <div class="cell column_14"></div>
-        <div class="cell column_15"></div>
+      <div id="bass" class="sequencer bassRow">
+        <div class="instrument bassRow" data-instrument="bass">bass</div>
+        <div class="cell column_0 bass"></div>
+        <div class="cell column_1 bass"></div>
+        <div class="cell column_2 bass"></div>
+        <div class="cell column_3 bass"></div>
+        <div class="cell column_4 bass"></div>
+        <div class="cell column_5 bass"></div>
+        <div class="cell column_6 bass"></div>
+        <div class="cell column_7 bass"></div>
+        <div class="cell column_8 bass"></div>
+        <div class="cell column_9 bass"></div>
+        <div class="cell column_10 bass"></div>
+        <div class="cell column_11 bass"></div>
+        <div class="cell column_12 bass"></div>
+        <div class="cell column_13 bass"></div>
+        <div class="cell column_14 bass"></div>
+        <div class="cell column_15 bass"></div>
         <div class="pattern-length">
           <select name="" id="bassLength">
             <option value="0">01</option>
@@ -122,8 +126,8 @@
         </div>
       </div>
       <div id="rhythm" class="rhythm-sequencer">
-        <div id="closedhat" class="drum">
-          <div class="instrument drum" data-instrument="hat">hi hat</div>
+        <div id="closedhat" class="drumRow">
+          <div class="instrument drumRow" data-instrument="hat">hi hat</div>
           <div class="cell column_0 hat"></div>
           <div class="cell column_1 hat"></div>
           <div class="cell column_2 hat"></div>
@@ -161,8 +165,8 @@
             </select>
           </div>
         </div>
-        <div id="snare" class="drum">
-          <div class="instrument drum snare" data-instrument="snare">snare</div>
+        <div id="snare" class="drumRow">
+          <div class="instrument drumRow snare" data-instrument="snare">snare</div>
           <div class="cell column_0 snare"></div>
           <div class="cell column_1 snare"></div>
           <div class="cell column_2 snare"></div>
@@ -200,8 +204,8 @@
             </select>
           </div>
         </div>
-        <div id="kick" class="drum">
-          <div class="instrument drum kick" data-instrument="kick">kick</div>
+        <div id="kick" class="drumRow">
+          <div class="instrument drumRow kick" data-instrument="kick">kick</div>
           <div class="cell column_0 kick"></div>
           <div class="cell column_1 kick"></div>
           <div class="cell column_2 kick"></div>
@@ -245,41 +249,49 @@
   </div>
   <div class="container">
     <div id="bottomBox1">
-
-      <div id="states"></div>
-      <!-- <div id="putTheWidgetHere"> -->
+        <div id="states" class="loader-inner line-scale">
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+      <!-- <div id="processing">Processing...</div> -->
       <iframe id="soundcloud" width="100%" height="146px" scrolling="no" frameborder="no" src=""></iframe>
     </div>
-    <!-- </div> -->
-    <div id="savePanel" class="bottomBox2">
-      <div class="bottomBoxPanel2">
-        <div class="savePattern" id="savePattern1">Pattern 1</div>
-        <div class="savePattern" id="savePattern2">Pattern 2</div>
-        <div class="savePattern" id="savePattern3">Pattern 3</div>
-        <div class="savePattern" id="savePattern4">Pattern 4</div>
+a
+    <!-- <div class="bottomBox23"> -->
+      <div id="savePanel" class="bottomBox2">
+        <div class="bottomBoxPanel2">
+          <div class="savePattern" id="savePattern1">Pattern 1</div>
+          <div class="savePattern" id="savePattern2">Pattern 2</div>
+          <div class="savePattern" id="savePattern3">Pattern 3</div>
+          <div class="savePattern" id="savePattern4">Pattern 4</div>
+        </div>
       </div>
-    </div>
-    <div id="loadPanel" class="bottomBox2">
-      <div class="bottomBoxPanel2">
-        <div class="loadPattern" id="loadPattern1">Pattern 1</div>
-        <div class="loadPattern" id="loadPattern2">Pattern 2</div>
-        <div class="loadPattern" id="loadPattern3">Pattern 3</div>
-        <div class="loadPattern" id="loadPattern4">Pattern 4</div>
+      <div id="loadPanel" class="bottomBox2">
+        <div class="bottomBoxPanel2">
+          <div class="loadPattern" id="loadPattern1">Pattern 1</div>
+          <div class="loadPattern" id="loadPattern2">Pattern 2</div>
+          <div class="loadPattern" id="loadPattern3">Pattern 3</div>
+          <div class="loadPattern" id="loadPattern4">Pattern 4</div>
+        </div>
       </div>
-    </div>
-    <div id="recordPanel" class="bottomBox2">
-      <div class="bottomBoxPanel2">
-        <div class="loadPattern" id="recordStart">Record</div>
-        <div class="loadPattern" id="recordStop">Stop</div>
+      <div id="recordPanel" class="bottomBox2">
+        <div class="bottomBoxPanel2">
+          <div class="recordPattern" id="recordStart">Record</div>
+          <div class="recordPattern" id="recordStop">Stop</div>
+          <div class="recordPattern" id="recordDisplay"></div>
+        </div>
       </div>
-    </div>
-    <div id="bottomBox3">
-      <div class="bottomBoxPanel3">
-        <div id="save" class="selectedPanel">Save</div>
-        <div id="load" class="deselectedPanel">Load</div>
-        <div id="record" class="deselectedPanel">Record</div>
-      </div>
-    </div>
+      <div id="bottomBox3">
+        <div class="bottomBoxPanel3">
+          <div id="save" class="selectedPanel">Save</div>
+          <div id="load" class="deselectedPanel">Load</div>
+          <div id="record" class="deselectedPanel">Record</div>
+        </div>
+      <!-- </div> -->
+  </div>
   </div>
   <footer></footer>
   <script src="https://code.jquery.com/jquery-2.2.3.min.js" integrity="sha256-a23g1Nt4dtEYOj7bR+vTu7+T8VP13humZFBJNIYoEJo=" crossorigin="anonymous"></script>
