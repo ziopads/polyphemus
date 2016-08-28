@@ -9,12 +9,12 @@ function localStorageSupported() {
  }
 }
 
-function saveInstrument(name) {
-  if (!currentState[name]) {
+function saveInstrument(instrumentName) {
+  if (!currentState[instrumentName]) {
     console.log('adding value');
-    currentState[name] = [];
+    currentState[instrumentName] = [];
   }
-  var array = $('#' + name).children('.cell');
+  var array = $('#' + instrumentName).children('.cell');
   for (var i = 0; i < array.length; i++) {
     currentState[name][i] = $(array[i]).hasClass('active');
   }

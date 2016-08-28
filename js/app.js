@@ -107,7 +107,7 @@ function playStopListener() {
 function startPlay() {
   playIndex = 0;
   noteTime = 0.0;
-  startTime = context.currentTime + lookaheadTime;
+  startTime = context.currentTime + lookaheadTime; // actually, this probably isn't lookaheadTime so much as it is a temporal offset applied on playstart to allow for JS stuff. This is the value that was creating a problem in timing when hitting play. Latency setting.
   schedule();
 }
 
