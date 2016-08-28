@@ -24,8 +24,6 @@ var bufferLoader;
 var instruments = ['lead','bass','closedhat','snare','kick']
 var currentState = {};
 
-
-
 ////////////////////////////////////////////////////////////////////////////////
 ////////////      DOCUMENT READY       /////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -97,31 +95,22 @@ function playSound(sourceBuffer) {
 function playStopListener() {
   $('.playStop').click(function(e) {
     if ($(e.target).hasClass('fa-play')) {
-      // $(e.target).removeClass('fa-play').addClass('fa-stop');
       startPlay();
     } else {
-      // $(e.target).removeClass('fa-stop').addClass('fa-play');
       stopPlay();
     }
     $(e.target).toggleClass('fa-play fa-stop');
   });
 }
 
-// function stopListener(){
-//   $('#play-stop').click(function(){
-//     stopPlay();
-//   })
-// }
-
-function startPlay(event) {
+function startPlay(event) {   // WHY IS THIS FUNCTION TAKING AN EVENT AS AN ARGUMENT???
   playIndex = 0;
   noteTime = 0.0;
-  startTime = context.currentTime + 0.010;
-  // startTime = context.currentTime;
+  startTime = context.currentTime + 0.200;
   schedule();
 }
 
-function stopPlay(event) {
+function stopPlay(event) {    // WHY IS THIS FUNCTION TAKING AN EVENT AS AN ARGUMENT???
   cancelAnimationFrame(timeoutId);
   $(".cell").removeClass("playing");
 }
@@ -150,7 +139,7 @@ function schedule() {
     })
     // if (noteTime != lastDrawTime) {
     //     lastDrawTime = noteTime;
-        drawPlayhead(playIndex);
+    drawPlayhead(playIndex);
     // }
     advanceNote();
   }
@@ -176,13 +165,6 @@ function advanceNote() {
     noteTime += 0.25 * secondsPerBeat
 }
 
-// var oscillator = context.createOscillator();
-// oscillator.connect(context.destination);
-// const gain = context.createGain();              // CREATE GAIN NODE
-// oscillator.connect(gain);
-// gain.connect(context.destination);              // CONNECT GAIN NODE TO DESTINATION
-// oscillator.start(0);
-// oscillator.stop(context.currentTime + 2);
 ////////////////////////////////////////////////////////////////////////////////
 ////////////      TODO CODE FOR SETTING LOOP_LENGTH       //////////////////////
 ////////////////////////////////////////////////////////////////////////////////
