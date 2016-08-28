@@ -2,6 +2,7 @@ var bpm = 120;
 var volume;
 var playIndex;
 var startTime;
+var lookaheadTime = 0.200;
 var loop_length = 16;
 // var lastDrawTime = -1;
 var noteTime;
@@ -22,7 +23,7 @@ var context;
 var bufferLoader;
 
 var instruments = ['lead','bass','closedhat','snare','kick']
-var currentState = {};
+// var currentState = {};
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////      DOCUMENT READY       /////////////////////////////////////////
@@ -116,9 +117,9 @@ function stopPlay(event) {    // WHY IS THIS FUNCTION TAKING AN EVENT AS AN ARGU
 }
 
 function schedule() {
-  var currentTime = context.currentTime;
+  var currentTime = context.currentTime;  // currentTime is the time SINCE hitting play and starting the sequencer
   currentTime -= startTime;
-  while (noteTime < currentTime + 0.200) {
+  while (noteTime < currentTime + lookaheadTime) {
     var $currentCells = $(".column_" + playIndex);
     $currentCells.each(function() {
       if ($(this).hasClass("active") && $(this).hasClass("kick")) {
@@ -146,10 +147,10 @@ function schedule() {
   timeoutId = requestAnimationFrame(schedule);
 }
 
-function drawPlayhead(xindex) {
-    var lastIndex = (xindex + loop_length - 1) % loop_length;
-    var $newRows = $('.column_' + xindex);
-    var $oldRows = $('.column_' + lastIndex);
+function drawPlayhead(currentIndex) {
+    var previousIndex = (currentIndex + loop_length - 1) % loop_length;
+    var $newRows = $('.column_' + currentIndex);
+    var $oldRows = $('.column_' + previousIndex);
 
     $newRows.addClass("playing");
     $oldRows.removeClass("playing");
