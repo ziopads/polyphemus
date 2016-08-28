@@ -23,7 +23,7 @@ var context;
 var bufferLoader;
 
 var instruments = ['lead','bass','closedhat','snare','kick']
-// var currentState = {};
+var currentState = {};
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////      DOCUMENT READY       /////////////////////////////////////////
@@ -36,7 +36,7 @@ $(document).ready(function() {
   // stopListener();
   console.log("context.currentTime" + context.currentTime);
   var recorderObj = {
-      // context: context,
+      context: context,
       source: gain
   };
   recorder = new SC.Recorder(recorderObj);
@@ -104,14 +104,14 @@ function playStopListener() {
   });
 }
 
-function startPlay(event) {   // WHY IS THIS FUNCTION TAKING AN EVENT AS AN ARGUMENT???
+function startPlay() {
   playIndex = 0;
   noteTime = 0.0;
-  startTime = context.currentTime + 0.200;
+  startTime = context.currentTime + lookaheadTime;
   schedule();
 }
 
-function stopPlay(event) {    // WHY IS THIS FUNCTION TAKING AN EVENT AS AN ARGUMENT???
+function stopPlay() {
   cancelAnimationFrame(timeoutId);
   $(".cell").removeClass("playing");
 }
