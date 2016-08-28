@@ -186,8 +186,8 @@ function playStopListener() {
 function startPlay(event) {
   playIndex = 0;
   noteTime = 0.0;
-  // startTime = context.currentTime + 0.005;
-  startTime = context.currentTime;
+  startTime = context.currentTime + 0.010;
+  // startTime = context.currentTime;
   schedule();
 }
 
@@ -200,33 +200,31 @@ function schedule() {
   var currentTime = context.currentTime;
   currentTime -= startTime;
   while (noteTime < currentTime + 0.200) {
-      var contextPlayTime = noteTime + startTime;
-      var $currentCells = $(".column_" + playIndex);
-      $currentCells.each(function() {
-        if ($(this).hasClass("active") && $(this).hasClass("kick")) {
-            playSound(kickBuffer);
-          }
-        if ($(this).hasClass("active") && $(this).hasClass("snare")) {
-            playSound(snareBuffer);
-          }
-        if ($(this).hasClass("active") && $(this).hasClass("hat")) {
-            playSound(hatBuffer);
-          }
-        if ($(this).hasClass("active") && $(this).hasClass("lead")) {
-            playSound(leadBuffer);
-          }
-        if ($(this).hasClass("active") && $(this).hasClass("bass")) {
-            playSound(bassBuffer);
-          }
-
-      })
-    if (noteTime != lastDrawTime) {
-        lastDrawTime = noteTime;
+    var $currentCells = $(".column_" + playIndex);
+    $currentCells.each(function() {
+      if ($(this).hasClass("active") && $(this).hasClass("kick")) {
+        playSound(kickBuffer);
+      }
+      if ($(this).hasClass("active") && $(this).hasClass("snare")) {
+        playSound(snareBuffer);
+      }
+      if ($(this).hasClass("active") && $(this).hasClass("hat")) {
+        playSound(hatBuffer);
+      }
+      if ($(this).hasClass("active") && $(this).hasClass("lead")) {
+        playSound(leadBuffer);
+      }
+      if ($(this).hasClass("active") && $(this).hasClass("bass")) {
+        playSound(bassBuffer);
+      }
+    })
+    // if (noteTime != lastDrawTime) {
+    //     lastDrawTime = noteTime;
         drawPlayhead(playIndex);
-    }
+    // }
     advanceNote();
   }
-  timeoutId = requestAnimationFrame(schedule)
+  timeoutId = setTimeout("schedule()", 0);
 }
 
 function drawPlayhead(xindex) {
