@@ -11,9 +11,20 @@
   <link rel="stylesheet" href="styles/bottomPanel.css">
   <link rel="stylesheet" type="text/css" href="loaders.min.css">
   <link rel="stylesheet" type="text/css" href="loaders.css">
+  <script type="text/javascript" src="js/app.js"></script>
+  <script type="text/javascript" src="js/soundcloud.js"></script>
+  <script type="text/javascript" src="js/localstorage.js"></script>
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.2/css/font-awesome.min.css">
   <script src="https://code.jquery.com/jquery-2.2.3.min.js" integrity="sha256-a23g1Nt4dtEYOj7bR+vTu7+T8VP13humZFBJNIYoEJo=" crossorigin="anonymous"></script>
   <script src="http://www.html5rocks.com/en/tutorials/webaudio/intro/js/buffer-loader.js"></script>
+  <script src="https://code.jquery.com/jquery-2.2.3.min.js" integrity="sha256-a23g1Nt4dtEYOj7bR+vTu7+T8VP13humZFBJNIYoEJo=" crossorigin="anonymous"></script>
+  <script src="https://connect.soundcloud.com/sdk/sdk-3.0.0.js"></script>
+  <script>
+    SC.initialize({
+      client_id: 'ddafe9707aafb3e808ddc08c4e76f88a',
+      redirect_uri: 'http://ziopads-form.s3-website-us-east-1.amazonaws.com/callback.html'
+    });
+  </script>
 
   <title>Polyphemus</title>
 </head>
@@ -32,8 +43,7 @@
         <input type="range" name="volume" id="volume-slider" min="0" max="1" step=".01">
       </div>
       <label for="play"></label>
-      <div class="placeholder" id="play-stop"><i class="fa fa-play playStop" aria-hidden="true"></i>
-</i></div>
+      <div class="placeholder" id="play-stop"><i class="fa fa-play playStop" aria-hidden="true"></i></div>
       <!-- <label for="tempo"></label>
       <input type="button" name="tempo" value="STOP" id="stop"> -->
       <div class="placeholder" id="tempoControl">Tempo Control</div>
@@ -302,15 +312,5 @@
   </div>
   </div>
   <footer></footer>
-  <script src="https://code.jquery.com/jquery-2.2.3.min.js" integrity="sha256-a23g1Nt4dtEYOj7bR+vTu7+T8VP13humZFBJNIYoEJo=" crossorigin="anonymous"></script>
-  <script src="https://connect.soundcloud.com/sdk/sdk-3.0.0.js"></script>
-  <script>
-    SC.initialize({
-      client_id: 'ddafe9707aafb3e808ddc08c4e76f88a',
-      redirect_uri: 'http://ziopads-form.s3-website-us-east-1.amazonaws.com/callback.html'
-    });
-  </script>
-  <script type="text/javascript" src="app.js"></script>
-  <!-- <script type="text/javascript" src="recorderjs/recorder.js"></script> -->
 </body>
 </html>
