@@ -1,9 +1,13 @@
 var bpm = 120;
 var volume;
 var playIndex;
+var playIndexKick;
+var playIndexSnare;
 var startTime;
 var lookaheadTime = 0.200;
 var loop_length = 16;
+var loop_lengthKick = 16;
+var loop_lengthSnare = 16;
 // var lastDrawTime = -1;
 var noteTime;
 // console.log(loop_length);
@@ -105,7 +109,9 @@ function playStopListener() {
 }
 
 function startPlay() {
-  playIndex = 0;
+  playIndexMaster = 0;
+  playIndexKick = 0;
+  playIndexSnare = 0;
   noteTime = 0.0;
   startTime = context.currentTime + lookaheadTime; // actually, this probably isn't lookaheadTime so much as it is a temporal offset applied on playstart to allow for JS stuff. This is the value that was creating a problem in timing when hitting play. Latency setting.
   schedule();
@@ -120,7 +126,8 @@ function schedule() {
   var currentTime = context.currentTime;  // currentTime is the time SINCE hitting play and starting the sequencer
   currentTime -= startTime;
   while (noteTime < currentTime + lookaheadTime) {
-    var $currentCells = $(".column_" + playIndex);
+    var $currentKick = $(".kick.column_" + playIndexKick) + $(".snare.column_" + playIndexSnare);
+    console.log($currentCells);
     $currentCells.each(function() {
       if ($(this).hasClass("active") && $(this).hasClass("kick")) {
         playSound(kickBuffer);
@@ -128,49 +135,83 @@ function schedule() {
       if ($(this).hasClass("active") && $(this).hasClass("snare")) {
         playSound(snareBuffer);
       }
-      if ($(this).hasClass("active") && $(this).hasClass("hat")) {
-        playSound(hatBuffer);
-      }
-      if ($(this).hasClass("active") && $(this).hasClass("lead")) {
-        playSound(leadBuffer);
-      }
-      if ($(this).hasClass("active") && $(this).hasClass("bass")) {
-        playSound(bassBuffer);
-      }
+      // if ($(this).hasClass("active") && $(this).hasClass("hat")) {
+      //   playSound(hatBuffer);
+      // }
+      // if ($(this).hasClass("active") && $(this).hasClass("lead")) {
+      //   playSound(leadBuffer);
+      // }
+      // if ($(this).hasClass("active") && $(this).hasClass("bass")) {
+      //   playSound(bassBuffer);
+      // }
     })
     // if (noteTime != lastDrawTime) {
     //     lastDrawTime = noteTime;
-    drawPlayhead(playIndex);
+    // drawPlayhead(playIndex);
+    drawPlayheadKick(playIndexKick);
+    // drawPlayheadSnare(playIndexSnare);
     // }
     advanceNote();
   }
   timeoutId = requestAnimationFrame(schedule);
 }
 
-function drawPlayhead(currentIndex) {
-    var previousIndex = (currentIndex + loop_length - 1) % loop_length;
-    var $newRows = $('.column_' + currentIndex);
-    var $oldRows = $('.column_' + previousIndex);
+// function drawPlayhead(currentIndex) {
+//     var previousIndex = (currentIndex + loop_length - 1) % loop_length;
+//     var $newRows = $('.column_' + currentIndex);
+//     var $oldRows = $('.column_' + previousIndex);
+//
+//     $newRows.addClass("playing");
+//     $oldRows.removeClass("playing");
+// }
 
-    $newRows.addClass("playing");
-    $oldRows.removeClass("playing");
+function drawPlayheadKick(currentIndex) {
+    var previousIndex = (currentIndex + loop_lengthKick - 1) % loop_lengthKick;
+    var $newRowsKick = $('.kick.column_' + currentIndex);
+    var $oldRowsKick = $('.kick.column_' + previousIndex);
+
+    $newRowsKick.addClass("playing");
+    $oldRowsKick.removeClass("playing");
+}
+function drawPlayheadSnare(currentIndex) {
+    var previousIndex = (currentIndex + loop_lengthSnare - 1) % loop_lengthSnare;
+    var $newRowsSnare = $('.snare.column_' + currentIndex);
+    var $oldRowsSnare = $('.snare.column_' + previousIndex);
+
+    $newRowsSnare.addClass("playing");
+    $oldRowsSnare.removeClass("playing");
 }
 
 function advanceNote() {
-    var secondsPerBeat = 60.0 / bpm;
-    playIndex++;
-    if (playIndex == loop_length) {  // when playIndex reaches the end of the loop,
-        playIndex = 0;               // return to index 0
+    var secondsPerBeat = 240.0 / bpm;
+    playIndexMaster++;
+    playIndexKick++;
+    playIndexSnare++;
+    if (playIndexMaster == loop_length) {  // when playIndex reaches the end of the loop,
+        playIndexMaster = 0;               // return to index 0
+    }
+    if (playIndexKick == loop_lengthKick) {  // when playIndex reaches the end of the loop,
+        playIndexKick = 0;               // return to index 0
+    }
+    if (playIndexSnare == loop_lengthSnare) {  // when playIndex reaches the end of the loop,
+        playIndexSnare = 0;               // return to index 0
     }
     //0.25 because each square is a 16th note
     noteTime += 0.25 * secondsPerBeat
+    // console.log(playIndexSnare);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////      TODO CODE FOR SETTING LOOP_LENGTH       //////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-
-
+$('#kickLength').change(function(e){
+  loop_lengthKick = $(this).val();
+  // console.log(loop_lengthKick);
+})
+$('#snareLength').change(function(e){
+  loop_lengthSnare = $(this).val();
+  console.log('SNARE ', loop_lengthSnare);
+})
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////      VOLUME SLIDER       //////////////////////////////////////////
