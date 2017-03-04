@@ -1,4 +1,3 @@
-var currentState = {};
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////      EVENT LISTENERS FOR LOCAL STORAGE       //////////////////////
@@ -18,15 +17,15 @@ function saveInstrument(instrumentName) {
   }
   var array = $('#' + instrumentName).children('.cell');
   for (var i = 0; i < array.length; i++) {
-    currentState[name][i] = $(array[i]).hasClass('active');
+    currentState[instrumentName][i] = $(array[i]).hasClass('active');
   }
 }
 
-function loadInstrument(name){
-  if (!currentState[name]) return;
-  var array = $('#' + name).children('.cell');
+function loadInstrument(instrumentName){
+  if (!currentState[instrumentName]) return;
+  var array = $('#' + instrumentName).children('.cell');
   for (var i = 0; i < array.length; i++) {
-    if (currentState[name][i]) {
+    if (currentState[instrumentName][i]) {
       $(array[i]).addClass('active');
     }
     else {
