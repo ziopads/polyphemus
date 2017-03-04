@@ -11,16 +11,26 @@ body {
 }
 header{
   align-self: flex-start;
-  background-color: #888;
+  background-image: linear-gradient( rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5) ), url('https://res.cloudinary.com/ziopads/image/upload/v1488606067/lynnlyStudies3_le5cvh.jpg');
+  /*background-color: #888;*/
   color: #eee;
-    padding: 20px;
+    margin-top: 10px;
+    margin-bottom: 0px;
+    margin-left: 10px;
+    margin-right: 10px;
+    padding-bottom: 20px;
+}
+#main-image {
+  width: 100%;
+  overflow: hidden;
 }
 h1 {
   font-family: "Arimo";
   font-size: 2em;
   text-transform: uppercase;
   text-align: center;
-  background-color: #888;
+  /*background-color: #888;*/
+  padding-top: 30px;
 }
 
 h2{
@@ -28,7 +38,8 @@ h2{
   font-size: 1em;
   text-transform: uppercase;
   text-align: center;
-  background-color: #888;
+  /*background-color: #888;*/
+  /*padding-bottom: 10px;*/
 
 }
 
@@ -42,5 +53,5 @@ footer {
   align-items: flex-end;
   background-color: #888;
   width: 100%;
-  height: 40px;
+  height: auto;
 }
