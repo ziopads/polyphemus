@@ -42,7 +42,7 @@ $('#recordStop').click(function(){
         asset_data: blob,
         title: 'track' + Date.now(),
         sharing: 'public',
-        progress: (event) => {
+        progress: function (event) {
           console.log('progress', event);
         }
       }).then(function(track){

@@ -4,29 +4,37 @@
 }
 body {
   /*display: flex;*/
-  min-height: 100vh;
-  max-height: 100vh;
+  /*min-height: 100vh;
+  max-height: 100vh;*/
   background-color: #bbb;
+  min-width: 900px;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
 
 }
 header{
-  align-self: flex-start;
+  /*align-self: flex-start;*/
+  /*height: 25vh;*/
   background-image: linear-gradient( rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5) ), url('https://res.cloudinary.com/ziopads/image/upload/v1488606067/lynnlyStudies3_le5cvh.jpg');
   /*background-color: #888;*/
   color: #eee;
-    margin-top: 10px;
-    margin-bottom: 0px;
-    margin-left: 10px;
-    margin-right: 10px;
-    padding-bottom: 20px;
+  margin-top: 10px;
+  margin-bottom: 0px;
+  margin-left: 10px;
+  margin-right: 10px;
+  padding-bottom: 20px;
+  position: relative;
 }
 #main-image {
+  align-items: stretch;
   position: absolute;
+  height: 8em;
   float: left;
   margin: 10px;
   margin-left: 40px;
   border-radius: 50%;
-  width: 7%;
+  /*width: 7%;*/
   overflow: hidden;
 }
 h1 {
