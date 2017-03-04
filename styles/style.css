@@ -21,7 +21,12 @@ header{
     padding-bottom: 20px;
 }
 #main-image {
-  width: 100%;
+  position: absolute;
+  float: left;
+  margin: 10px;
+  margin-left: 40px;
+  border-radius: 50%;
+  width: 7%;
   overflow: hidden;
 }
 h1 {
