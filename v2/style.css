@@ -387,3 +387,28 @@ code { font-family: var(--f-mono); font-size: .92em; }
   .grid[data-kind="drums"], .grid[data-kind="drums"] + .vlane { --label-w: 76px; }
   .editor .mini { grid-template-columns: auto 90px 3em; }
 }
+
+/* ---------- MIDI / Live ---------- */
+.panel.midi {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.panel.midi h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.panel.midi > p, .panel.midi .note { margin: 0; color: var(--muted); font-size: 14px; max-width: 78ch; }
+#midiBody { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.midi-status { font-family: var(--f-mono); font-size: 12px; color: var(--lamp); }
+.midi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; width: 100%; }
+.midi-col { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; background: var(--panel-2); border-radius: var(--radius); min-width: 0; }
+.midi-col h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 500; }
+.midi-col select { max-width: 220px; }
+.midi-col output { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.midi-ch { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.midi-ch .field label { color: var(--tc); }
+.howto summary { cursor: pointer; font-size: 14px; }
+.howto ol { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 14px; max-width: 78ch; display: flex; flex-direction: column; gap: 4px; }
+.howto strong { color: var(--text); font-weight: 500; }

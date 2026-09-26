@@ -74,6 +74,25 @@
     </section>
   </main>
 
+  <section class="panel midi" aria-labelledby="midiTitle">
+    <div class="export-head">
+      <h2 id="midiTitle">Play with Ableton Live</h2>
+      <span class="midi-status" id="midiStatus">Not connected</span>
+    </div>
+    <p>Polyphemus follows Live's MIDI clock and sends its notes into Live as they play, chance and humanize included. Needs Chrome or Edge on a computer.</p>
+    <div id="midiBody"></div>
+    <details class="howto">
+      <summary>Setting up Live on a Mac</summary>
+      <ol>
+        <li>In <strong>Audio MIDI Setup</strong>, open Window → Show MIDI Studio, double-click <strong>IAC Driver</strong> and tick "Device is online".</li>
+        <li>In Live's <strong>Settings → Link, Tempo &amp; MIDI</strong>, turn on <strong>Sync</strong> for the IAC Driver output (clock to Polyphemus) and <strong>Track</strong> for the IAC Driver input (notes from Polyphemus).</li>
+        <li>Here, choose the IAC Driver bus for both Clock in and Out.</li>
+        <li>In Live, create a MIDI track per part: input "IAC Driver", channel 10 for drums (into a Drum Rack), 1 for bass, 2 for lead, 3 for pad, Monitor set to In. Don't route any track's output back to the IAC Driver.</li>
+        <li>Press Play in Live. Polyphemus answers each clock pulse about 20 ms later (80 ms with its built-in sounds on), so set Live's MIDI Clock Sync Delay for the IAC output to about −20 ms, then fine-tune with the Offset slider here.</li>
+      </ol>
+    </details>
+  </section>
+
   <section class="export" aria-labelledby="exportTitle">
     <div class="export-head">
       <h2 id="exportTitle">MIDI clips for Ableton Live</h2>

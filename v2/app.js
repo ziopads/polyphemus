@@ -291,6 +291,11 @@
     };
   }
 
+  function defaultMidi() {
+    return { enabled: false, inName: '', outName: '', follow: true, sendNotes: true, sendClock: false, localAudio: false,
+      offset: 0, channels: { drums: 10, bass: 1, lead: 2, pad: 3 } };
+  }
+
   function defaultState() {
     return {
       version: STATE_VERSION,
@@ -299,6 +304,7 @@
       root: 2, scale: 'dorian',
       current: 0, track: 'drums', voice: 'rim', chord: 'off', laneMode: 'vel',
       exportLength: 'cycle', drumMap: 'gm', splitDrums: false, bakeChance: false,
+      midi: defaultMidi(),
       mixer: defaultMixer(),
       patterns: [patternDub(), patternOrganic(), patternDrift(), emptyPattern()],
     };
@@ -387,6 +393,16 @@
       if (saved.drumMap === 'pads') s.drumMap = 'pads';
       s.splitDrums = !!saved.splitDrums;
       s.bakeChance = !!saved.bakeChance;
+      if (saved.midi && typeof saved.midi === 'object') {
+        const m = saved.midi;
+        const d = s.midi;
+        d.enabled = !!m.enabled;
+        if (typeof m.inName === 'string') d.inName = m.inName;
+        if (typeof m.outName === 'string') d.outName = m.outName;
+        for (const k of ['follow', 'sendNotes', 'sendClock', 'localAudio']) if (typeof m[k] === 'boolean') d[k] = m[k];
+        d.offset = clampInt(m.offset, -60, 120, 0);
+        if (m.channels) for (const t of TRACKS) d.channels[t.id] = clampInt(m.channels[t.id], 1, 16, d.channels[t.id]);
+      }
       if (Array.isArray(saved.patterns)) s.patterns = s.patterns.map((d, i) => normalizePattern(saved.patterns[i], d));
     } catch (e) { /* storage blocked or unreadable: start from the demos */ }
     return s;
@@ -632,20 +648,27 @@
     return [time + Math.random() * h * 0.018, Math.max(0.05, vel * (1 - Math.random() * h * 0.3))];
   }
 
-  // Called every TICK_STEP ticks with the exact audio time of that tick.
+  // Called every TICK_STEP ticks with the exact audio time of that tick. Internally the
+  // Tone Transport drives it (and applies swing); when following MIDI clock, onClockPulse does.
   function tick(time) {
     const tk = masterTick;
     masterTick += TICK_STEP;
+    if (following) time += swingOffset(tk);
     if (queuedSlot !== null && tk % BAR === 0) {
       state.current = queuedSlot;
       queuedSlot = null;
       patStart = tk;
       drawer().schedule(() => { save(); renderAll(); }, time);
     }
+    if (midi.sendClock && !following && tk % CLOCK_TICKS === 0) {
+      if (tk === 0) midiSend([0xfa], time);
+      midiSend([0xf8], time);
+    }
     const rel = tk - patStart;
     const p = pat();
     const rc = rowCount();
     const steps = {};
+    const local = !!engine && (midi.localAudio || !midiOut);
 
     for (const L of lanesOf(p)) {
       const tps = rateTicks(L.lane.rate);
@@ -656,52 +679,265 @@
         const v = L.lane.vel[s];
         if (v && Math.random() * 100 < L.lane.prob[s]) {
           const [t, vel] = humanized(time, v / 127);
-          safe(() => fireDrum(L.voice, t, vel));
-          if (L.voice === 'ohh') lastOhhTick = tk;
-          else if (L.voice === 'chh' && lastOhhTick !== tk) safe(() => engine.drums.ohh.triggerRelease(t)); // choke
+          if (local) {
+            safe(() => fireDrum(L.voice, t, vel));
+            if (L.voice === 'ohh') lastOhhTick = tk;
+            else if (L.voice === 'chh' && lastOhhTick !== tk) safe(() => engine.drums.ohh.triggerRelease(t)); // choke
+          }
+          midiNote('drums', drumNote(L.voice), vel, t, 0.06);
         }
       } else {
         const t = TRACK_BY_ID[L.trackId];
-        const synth = engine.synths[t.id];
+        const synth = engine && engine.synths[t.id];
         const stepSec = beatsToSec(tps / PPQ);
         for (const n of L.lane.notes) {
           if (n.s !== s || n.r >= rc) continue;
           if (Math.random() * 100 >= n.p) continue;
           const [nt, vel] = humanized(time, n.v / 127);
           const dur = Math.max(0.03, n.l * stepSec * t.gate - 0.004);
-          safe(() => synth.triggerAttackRelease(mtof(midiFor(t.id, n.r)), dur, nt, vel));
+          const m = midiFor(t.id, n.r);
+          if (local) safe(() => synth.triggerAttackRelease(mtof(m), dur, nt, vel));
+          midiNote(t.id, m, vel, nt, dur);
         }
       }
     }
     if (Object.keys(steps).length) drawer().schedule(() => showPlayheads(steps), time);
   }
 
-  async function togglePlay() {
-    if (!T) return;
-    await ensureAudio();
+  // Tone's swing curve, reproduced for clock-following mode where the Transport isn't running.
+  function swingOffset(tk) {
+    const pair = PPQ / 2; // two 16ths
+    if (!state.swing || tk % PPQ === 0 || tk % pair === 0) return 0;
+    const amount = Math.sin(((tk % pair) / pair) * Math.PI) * state.swing;
+    return beatsToSec(pair / 3 / PPQ) * amount;
+  }
+
+  function startInternal() {
     const tr = transport();
-    if (playing) {
-      tr.stop();
-      playing = false;
-      queuedSlot = null;
-      clearPlayheads();
-      renderSlots();
-    } else {
-      masterTick = 0;
-      patStart = 0;
-      if (repeatId === null) repeatId = tr.scheduleRepeat(tick, `${TICK_STEP}i`, 0);
-      tr.position = 0;
-      tr.start('+0.05');
-      playing = true;
-    }
+    masterTick = 0;
+    patStart = 0;
+    if (repeatId === null) repeatId = tr.scheduleRepeat(tick, `${TICK_STEP}i`, 0);
+    tr.position = 0;
+    tr.start('+0.05');
+    playing = true;
+  }
+
+  function stopPlayback() {
+    if (!following) transport().stop();
+    if (midi.sendClock && !following) midiSend([0xfc], null);
+    midiPanic();
+    playing = false;
+    queuedSlot = null;
+    clearPlayheads();
+    renderSlots();
     updatePlayButton();
   }
 
+  async function togglePlay() {
+    if (!T) return;
+    if (following) { flash('Tempo and start/stop follow the MIDI clock. Start and stop from Live.'); return; }
+    await ensureAudio();
+    if (playing) stopPlayback();
+    else { startInternal(); updatePlayButton(); }
+  }
+
   function preview(trackId, rowOrVoice, vel = 0.75) {
-    if (!engine) return;
+    const note = trackId === 'drums' ? drumNote(rowOrVoice) : midiFor(trackId, rowOrVoice);
+    if (midiOut) midiNote(trackId, note, vel, null, 0.25);
+    if (!engine || (midiOut && !midi.localAudio)) return;
     const time = T.now() + 0.01;
     if (trackId === 'drums') safe(() => fireDrum(rowOrVoice, time, vel));
-    else safe(() => engine.synths[trackId].triggerAttackRelease(mtof(midiFor(trackId, rowOrVoice)), 0.25, time, vel));
+    else safe(() => engine.synths[trackId].triggerAttackRelease(mtof(note), 0.25, time, vel));
+  }
+
+  // ================================================================ Web MIDI: clock in, notes and clock out
+  const CLOCK_TICKS = PPQ / 24;            // MIDI clock runs at 24 pulses per quarter note
+  // Seconds between a clock pulse arriving and the notes for it: enough headroom to schedule
+  // audio when the built-in sounds play, just a little when only MIDI goes out.
+  const midiLatency = () => (state.midi.localAudio ? 0.08 : 0.02);
+  const midi = state.midi;
+  let midiAccess = null;
+  let midiIn = null;
+  let midiOut = null;
+  let following = false;                   // playing from an external clock
+  let clockTimes = [];                     // recent pulse timestamps (ms)
+  let pulseSec = 60 / state.bpm / 24;
+  let pendingSpp = 0;
+  let lastTempoUi = 0;
+
+  const drumNote = (voiceId) => (state.drumMap === 'pads' ? VOICE_BY_ID[voiceId].pad : VOICE_BY_ID[voiceId].gm);
+  const channelOf = (trackId) => Math.max(0, Math.min(15, (midi.channels[trackId] || 1) - 1));
+
+  // Convert between the audio clock (seconds) and performance.now() (ms), which is what
+  // MIDI timestamps use.
+  function clockMap() {
+    const raw = T && T.getContext().rawContext;
+    if (raw && raw.getOutputTimestamp) {
+      const ts = raw.getOutputTimestamp();
+      if (ts && ts.performanceTime) return { ctx: ts.contextTime, perf: ts.performanceTime };
+    }
+    return { ctx: T ? T.now() : 0, perf: performance.now() };
+  }
+  const audioToPerf = (sec) => { const m = clockMap(); return m.perf + (sec - m.ctx) * 1000; };
+  const perfToAudio = (ms) => { const m = clockMap(); return m.ctx + (ms - m.perf) / 1000; };
+
+  function midiSend(bytes, audioTime) {
+    if (!midiOut) return;
+    const when = audioTime === null ? performance.now() : audioToPerf(audioTime) + midi.offset;
+    try { midiOut.send(bytes, Math.max(performance.now(), when)); } catch (e) { console.warn('[polyphemus] midi', e); }
+  }
+  function midiNote(trackId, note, vel01, audioTime, durSec) {
+    if (!midiOut || !midi.sendNotes) return;
+    const ch = channelOf(trackId);
+    const v = Math.max(1, Math.min(127, Math.round(vel01 * 127)));
+    const on = audioTime === null ? performance.now() : Math.max(performance.now(), audioToPerf(audioTime) + midi.offset);
+    try {
+      midiOut.send([0x90 | ch, note, v], on);
+      midiOut.send([0x80 | ch, note, 0], on + durSec * 1000);
+    } catch (e) { console.warn('[polyphemus] midi', e); }
+  }
+  function midiPanic() {
+    if (!midiOut) return;
+    for (const t of TRACKS) { const ch = channelOf(t.id); try { midiOut.send([0xb0 | ch, 123, 0]); } catch (e) { /* ignore */ } }
+  }
+
+  function onMidiMessage(ev) {
+    const [st, d1, d2] = ev.data;
+    if (!midi.follow) return;
+    switch (st) {
+      case 0xf8: onClockPulse(ev.timeStamp || performance.now()); break;
+      case 0xfa: externalStart(0); break;                       // Start: from the top
+      case 0xfb: externalStart(pendingSpp * (PPQ / 4)); break;  // Continue: from the song position
+      case 0xfc: if (following) { following = false; stopPlayback(); renderMidi(); } break;
+      case 0xf2: pendingSpp = (d1 | (d2 << 7)); break;         // Song Position Pointer, in 16ths
+      default: break;
+    }
+  }
+
+  function externalStart(fromTick) {
+    if (!T) return;
+    ensureAudio().catch(() => {});
+    if (playing && !following) transport().stop();
+    following = true;
+    masterTick = Math.round(fromTick / TICK_STEP) * TICK_STEP;
+    patStart = 0;
+    playing = true;
+    updatePlayButton();
+    renderMidi();
+  }
+
+  function onClockPulse(ms) {
+    clockTimes.push(ms);
+    if (clockTimes.length > 48) clockTimes.shift();
+    if (clockTimes.length >= 8) {
+      const span = (clockTimes[clockTimes.length - 1] - clockTimes[0]) / (clockTimes.length - 1);
+      if (span > 5 && span < 80) {
+        pulseSec = span / 1000;
+        const bpm = Math.round((60 / (pulseSec * 24)) * 10) / 10;
+        if (Math.abs(bpm - state.bpm) >= 0.1) {
+          state.bpm = bpm;
+          if (engine) applyGlobals();
+          const now = performance.now();
+          if (now - lastTempoUi > 250) { lastTempoUi = now; $('#bpm').value = bpm; renderMidiStatus(); }
+        }
+      }
+    }
+    if (!following || !playing) return;
+    // Each pulse covers CLOCK_TICKS of our ticks; spread them across the pulse interval.
+    const base = perfToAudio(ms) + midiLatency();
+    const calls = CLOCK_TICKS / TICK_STEP;
+    for (let k = 0; k < calls; k++) tick(base + (k * pulseSec) / calls);
+  }
+
+  async function enableMidi() {
+    ensureAudio().catch(() => {}); // this click is the user gesture that lets audio (and the playhead clock) run
+    if (!navigator.requestMIDIAccess) {
+      flash(inArtifact() ? 'MIDI is not available on the claude.ai page. Open Polyphemus from GitHub Pages or a local server in Chrome or Edge.' : 'This browser has no Web MIDI. Use Chrome or Edge on a computer.', true);
+      return;
+    }
+    try {
+      midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+    } catch (e) {
+      flash(inArtifact() ? 'MIDI is blocked on the claude.ai page. Open Polyphemus from GitHub Pages or a local server.' : 'MIDI access was refused. Allow MIDI for this site in the browser settings.', true);
+      return;
+    }
+    midiAccess.onstatechange = () => { bindPorts(); renderMidi(); };
+    midi.enabled = true;
+    save();
+    bindPorts();
+    renderMidi();
+    flash('MIDI connected');
+  }
+
+  function bindPorts() {
+    if (!midiAccess) return;
+    const ins = [...midiAccess.inputs.values()];
+    const outs = [...midiAccess.outputs.values()];
+    const nextIn = ins.find((p) => p.name === midi.inName) || null;
+    if (midiIn && midiIn !== nextIn) midiIn.onmidimessage = null;
+    midiIn = nextIn;
+    if (midiIn) midiIn.onmidimessage = onMidiMessage;
+    midiOut = outs.find((p) => p.name === midi.outName) || null;
+  }
+
+  function renderMidiStatus() {
+    const s = $('#midiStatus');
+    if (!s) return;
+    if (!midiAccess) { s.textContent = 'Not connected'; return; }
+    const parts = [];
+    if (midi.follow && midiIn) parts.push(following ? `Following clock at ${state.bpm} BPM` : (clockTimes.length ? `Clock at ${state.bpm} BPM; waiting for Start` : 'Waiting for clock'));
+    if (midiOut) parts.push(midi.sendNotes ? `Sending notes to ${midiOut.name}` : `Connected to ${midiOut.name}`);
+    s.textContent = parts.join(' · ') || 'Connected; choose ports';
+  }
+
+  function renderMidi() {
+    const host = $('#midiBody');
+    if (!host) return;
+    const supported = !!navigator.requestMIDIAccess && !inArtifact();
+    if (!midiAccess) {
+      host.replaceChildren(
+        el('button', { type: 'button', id: 'midiEnable', text: 'Connect MIDI', onclick: enableMidi }),
+        el('p', { class: 'note', text: supported
+          ? 'Your browser will ask for permission to use MIDI devices.'
+          : inArtifact() ? 'MIDI works when Polyphemus is opened from GitHub Pages or a local server in Chrome or Edge; the claude.ai page blocks it.'
+            : 'This browser has no Web MIDI (Safari, and every browser on iPhone and iPad). Use Chrome or Edge on a computer.' }));
+      renderMidiStatus();
+      return;
+    }
+    const ins = [...midiAccess.inputs.values()];
+    const outs = [...midiAccess.outputs.values()];
+    const portSel = (id, list, current, onchange) => el('select', { id, onchange },
+      el('option', { value: '', text: 'None' }), ...list.map((p) => el('option', { value: p.name, text: p.name, selected: p.name === current })));
+    const chSel = (t) => el('select', { id: `ch-${t.id}`, 'aria-label': `${t.label} MIDI channel`,
+      onchange: (e) => { midi.channels[t.id] = +e.target.value; save(); } },
+      ...Array.from({ length: 16 }, (_, i) => el('option', { value: i + 1, text: String(i + 1), selected: midi.channels[t.id] === i + 1 })));
+
+    host.replaceChildren(
+      el('div', { class: 'midi-grid' },
+        el('div', { class: 'midi-col' },
+          el('h3', { text: 'Clock in' }),
+          el('div', { class: 'field' }, el('label', { for: 'midiIn', text: 'From' }),
+            portSel('midiIn', ins, midi.inName, (e) => { midi.inName = e.target.value; clockTimes = []; bindPorts(); save(); renderMidi(); })),
+          el('label', { class: 'check' }, el('input', { type: 'checkbox', id: 'midiFollow', checked: midi.follow,
+            onchange: (e) => { midi.follow = e.target.checked; if (!midi.follow && following) { following = false; stopPlayback(); } save(); renderMidi(); } }),
+          ' Follow tempo and start/stop'),
+          el('div', { class: 'field' }, el('label', { for: 'midiOffset', text: 'Offset' }),
+            el('input', { id: 'midiOffset', type: 'range', min: -60, max: 120, step: 1, value: midi.offset,
+              oninput: (e) => { midi.offset = +e.target.value; $('#midiOffsetOut').textContent = `${midi.offset} ms`; save(); } }),
+            el('output', { id: 'midiOffsetOut', for: 'midiOffset', text: `${midi.offset} ms` }))),
+        el('div', { class: 'midi-col' },
+          el('h3', { text: 'Out' }),
+          el('div', { class: 'field' }, el('label', { for: 'midiOut', text: 'To' }),
+            portSel('midiOut', outs, midi.outName, (e) => { midiPanic(); midi.outName = e.target.value; bindPorts(); save(); renderMidi(); })),
+          el('label', { class: 'check' }, el('input', { type: 'checkbox', id: 'midiNotes', checked: midi.sendNotes,
+            onchange: (e) => { midi.sendNotes = e.target.checked; if (!midi.sendNotes) midiPanic(); save(); renderMidiStatus(); } }), ' Send notes'),
+          el('label', { class: 'check' }, el('input', { type: 'checkbox', id: 'midiClockOut', checked: midi.sendClock, disabled: midi.follow,
+            onchange: (e) => { midi.sendClock = e.target.checked; save(); } }), ' Send clock (Polyphemus leads)'),
+          el('label', { class: 'check' }, el('input', { type: 'checkbox', id: 'midiLocal', checked: midi.localAudio,
+            onchange: (e) => { midi.localAudio = e.target.checked; save(); } }), ' Also play built-in sounds'),
+          el('div', { class: 'midi-ch' }, el('span', { class: 'field-label', text: 'Channels' }),
+            ...TRACKS.map((t) => el('span', { class: 'field', style: `--tc: var(--c-${t.id})` }, el('label', { for: `ch-${t.id}`, text: t.label }), chSel(t)))))));
+    renderMidiStatus();
   }
 
   // ================================================================ DOM helpers
@@ -793,7 +1029,7 @@
     const b = $('#play');
     b.disabled = !T;
     b.setAttribute('aria-pressed', String(playing));
-    $('#playLabel').textContent = !T ? 'Loading sounds…' : playing ? 'Stop' : 'Play';
+    $('#playLabel').textContent = !T ? 'Loading sounds…' : following ? 'Following Live' : playing ? 'Stop' : 'Play';
   }
 
   function renderSlots() {
@@ -1604,6 +1840,16 @@
   initExport();
   initKeys();
   renderAll();
+  renderMidi();
+  // Reconnect MIDI silently if it was on last time (Chrome remembers the permission).
+  if (state.midi.enabled && navigator.requestMIDIAccess && !inArtifact()) {
+    navigator.requestMIDIAccess({ sysex: false }).then((acc) => {
+      midiAccess = acc;
+      acc.onstatechange = () => { bindPorts(); renderMidi(); };
+      bindPorts();
+      renderMidi();
+    }).catch(() => {});
+  }
   updatePlayButton();
   downloadsReady.then(() => renderExport());
 
