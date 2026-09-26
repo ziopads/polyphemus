@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Polyphemus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=GFS+Didot&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand">
+      <span class="wordmark" lang="el">ΠΟΛΥΦΗΜΟΣ</span>
+      <span class="ver">v2</span>
+      <span class="tagline">polyrhythmic step sequencer</span>
+    </div>
+
+    <div class="transport">
+      <button id="play" class="play" type="button" disabled aria-pressed="false">
+        <span class="play-icon" aria-hidden="true"></span><span id="playLabel">Loading sounds…</span>
+      </button>
+      <div class="field">
+        <label for="bpm">Tempo</label>
+        <input id="bpm" type="number" min="40" max="220" step="1" inputmode="numeric">
+        <span class="unit">BPM</span>
+      </div>
+      <div class="field">
+        <label for="swing">Swing</label>
+        <input id="swing" type="range" min="0" max="60" step="1">
+        <output id="swingOut" for="swing"></output>
+      </div>
+      <div class="field">
+        <label for="humanize">Humanize</label>
+        <input id="humanize" type="range" min="0" max="100" step="1">
+        <output id="humanizeOut" for="humanize"></output>
+      </div>
+      <div class="field">
+        <label for="echoTime">Echo</label>
+        <select id="echoTime" aria-label="Echo time"></select>
+        <input id="echoFb" type="range" min="0" max="85" step="1" aria-label="Echo feedback">
+        <output id="echoFbOut" for="echoFb"></output>
+      </div>
+      <div class="field">
+        <label for="root">Key</label>
+        <select id="root" aria-label="Key root"></select>
+        <select id="scale" aria-label="Scale"></select>
+      </div>
+      <div class="field">
+        <label for="volume">Master</label>
+        <input id="volume" type="range" min="-40" max="6" step="1">
+      </div>
+    </div>
+
+    <div class="patterns">
+      <span class="field-label" id="patternsLabel">Pattern</span>
+      <div class="slots" id="slots" role="group" aria-labelledby="patternsLabel"></div>
+      <select id="copyTo" aria-label="Copy this pattern to another slot"></select>
+    </div>
+  </header>
+
+  <main class="deck">
+    <nav class="tracks" id="tracks" aria-label="Tracks"></nav>
+
+    <section class="editor" id="editor" aria-label="Pattern editor">
+      <div class="editor-bar" id="editorBar"></div>
+      <div class="grid-scroll">
+        <div id="grid" class="grid"></div>
+        <div id="vlane" class="grid vlane"></div>
+      </div>
+      <p class="hint" id="hint"></p>
+    </section>
+  </main>
+
+  <section class="export" aria-labelledby="exportTitle">
+    <div class="export-head">
+      <h2 id="exportTitle">MIDI clips for Ableton Live</h2>
+      <button type="button" id="exportAll">Download all tracks (.zip)</button>
+    </div>
+    <p>Exports the current pattern slot. Each file drops onto a clip slot as its own clip. A full cycle runs until every lane in the track lines up again and lands on a bar line, so the clip loops seamlessly in Live; cycles longer than 64 bars stop at 64. Chance and humanize stay in Polyphemus unless you bake them in, which renders one take.</p>
+    <div class="export-opts">
+      <div class="field"><label for="exportLength">Clip length</label><select id="exportLength"></select></div>
+      <div class="field"><label for="drumMap">Drum notes</label><select id="drumMap"></select></div>
+      <label class="check"><input type="checkbox" id="splitDrums"> One clip per drum voice</label>
+      <label class="check"><input type="checkbox" id="bakeChance"> Bake chance and humanize</label>
+    </div>
+    <div class="export-rows" id="exportBody"></div>
+  </section>
+
+  <details class="share" id="share">
+    <summary>Share or restore a pattern</summary>
+    <p>A pattern code holds the current slot plus tempo, key, and sound settings. Paste one here and choose <strong>Load code</strong> to replace the current slot.</p>
+    <textarea id="code" rows="3" spellcheck="false" aria-label="Pattern code"></textarea>
+    <div class="share-actions">
+      <button type="button" id="copyCode">Copy code</button>
+      <button type="button" id="loadCode">Load code</button>
+    </div>
+  </details>
+
+  <footer class="foot">
+    <span>Space plays and stops. Keys 1–4 pick a track. Pattern switches wait for the next bar while playing.</span>
+    <span>The original 2016 Polyphemus is archived in the repository under <code>v1/</code>.</span>
+  </footer>
+  <p class="status" id="status" role="status" aria-live="polite"></p>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

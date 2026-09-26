@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyphemus</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=GFS+Didot&family=IBM+Plex+Sans+Condensed:wght@400;600&display=swap">
+<style>
+  :root { color-scheme: dark; --ground:#14161a; --panel:#1c1f24; --line:#373c45; --text:#ebe5d6; --muted:#959ba6; --lamp:#f4e7bf; }
+  body { margin:0; background:var(--ground); color:var(--text); font:16px/1.5 "IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:56px 20px; display:flex; flex-direction:column; gap:20px; }
+  h1 { font-family:"GFS Didot", Georgia, serif; font-weight:400; font-size:40px; letter-spacing:.08em; margin:0; }
+  p { color:var(--muted); margin:0; }
+  a.card { display:block; padding:16px 18px; background:var(--panel); border:1px solid var(--line); border-radius:4px; color:var(--text); text-decoration:none; }
+  a.card:hover, a.card:focus-visible { border-color:var(--lamp); }
+  a.card strong { font-size:18px; }
+  a.card span { display:block; color:var(--muted); font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1 lang="el">ΠΟΛΥΦΗΜΟΣ</h1>
+  <p>A browser step sequencer, in two versions.</p>
+  <a class="card" href="v2/"><strong>v2 (2026)</strong><span>Polyrhythmic: per-lane lengths and step rates, velocity and chance lanes, dub echo, MIDI clip export for Ableton Live.</span></a>
+  <a class="card" href="v1/"><strong>v1 (2016)</strong><span>The original five-row sample sequencer, archived as it was. It predates current Web Audio APIs and may not play in a modern browser.</span></a>
+</main>
+</body>
+</html>
