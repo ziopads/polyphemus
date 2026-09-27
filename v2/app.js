@@ -22,12 +22,13 @@
     `https://unpkg.com/tone@${TONE_VERSION}/build/Tone.js`,
   ];
   const STORAGE_KEY = 'polyphemus.v2';
-  const STATE_VERSION = 3;
-  const CODE_PREFIX = 'PLY3:';
+  const STATE_VERSION = 4;
+  const CODE_PREFIX = 'PLY4:';
   const MAX_STEPS = 64;
   const PPQ = 480;                       // ticks per quarter note, for the scheduler and MIDI files
   const BAR = PPQ * 4;
   const SLOT_NAMES = ['A', 'B', 'C', 'D'];
+  const MAX_SECTIONS = 64;
   const NOTE_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
 
   // Step rates, in quarter-note beats per step.
@@ -94,17 +95,38 @@
   ];
   const VOICE_BY_ID = Object.fromEntries(DRUM_VOICES.map((v) => [v.id, v]));
 
-  const TRACKS = [
-    { id: 'drums', label: 'Drums', kind: 'drums' },
-    { id: 'bass',  label: 'Bass',  kind: 'melodic', octave: 1, mono: true,  gate: 0.92,
+  // Synth track types. A session has one drum kit plus up to MAX_SYNTHS synth tracks.
+  const MAX_SYNTHS = 7;
+  const SYNTH_TYPES = {
+    bass: { label: 'Bass', octave: 1, mono: true,  gate: 0.92,
       presets: [['dub', 'Dub'], ['sub', 'Sub'], ['wood', 'Wood']] },
-    { id: 'lead',  label: 'Lead',  kind: 'melodic', octave: 4, mono: false, gate: 0.9,
+    lead: { label: 'Lead', octave: 4, mono: false, gate: 0.9,
       presets: [['kalimba', 'Kalimba'], ['marimba', 'Marimba'], ['glass', 'Glass']] },
-    { id: 'pad',   label: 'Pad',   kind: 'melodic', octave: 3, mono: false, gate: 1.0,
+    pad:  { label: 'Pad',  octave: 3, mono: false, gate: 1.0,
       presets: [['stab', 'Dub stab'], ['drift', 'Drift'], ['tape', 'Tape']] },
+    keys: { label: 'Keys', octave: 3, mono: false, gate: 0.85,
+      presets: [['organ', 'Dub organ'], ['ep', 'Electric piano'], ['pluck', 'Pluck']] },
+  };
+  const TRACK_COLORS = ['#e5733f', '#d6ae4a', '#5db3c8', '#a98bdb', '#8fb86a', '#d9798f', '#6f93d8', '#c9a27a'];
+  const DEFAULT_TRACKS = [
+    { id: 'drums', kind: 'drums', name: 'Drums', color: 0 },
+    { id: 'bass', kind: 'synth', type: 'bass', name: 'Bass', color: 1 },
+    { id: 'lead', kind: 'synth', type: 'lead', name: 'Lead', color: 2 },
+    { id: 'pad',  kind: 'synth', type: 'pad',  name: 'Pad',  color: 3 },
   ];
-  const TRACK_BY_ID = Object.fromEntries(TRACKS.map((t) => [t.id, t]));
-  const MELODIC = TRACKS.filter((t) => t.kind === 'melodic');
+
+  // Track records are stored plainly in state.tracks; this adds the derived fields the
+  // rest of the code reads (label, kind 'melodic', presets, gate).
+  function describeTrack(tr) {
+    if (tr.kind === 'drums') return { ...tr, label: tr.name, kind: 'drums' };
+    const ty = SYNTH_TYPES[tr.type];
+    return { ...tr, label: tr.name, kind: 'melodic', typeLabel: ty.label, presets: ty.presets, gate: ty.gate, octave: ty.octave, mono: ty.mono };
+  }
+  const TRACKS = () => stateRef.tracks.map(describeTrack);
+  const MELODIC = () => TRACKS().filter((t) => t.kind === 'melodic');
+  const TRACK_BY_ID = (id) => { const tr = stateRef.tracks.find((x) => x.id === id); return tr ? describeTrack(tr) : null; };
+  const trackColor = (t) => TRACK_COLORS[(t && t.color) || 0];
+  let stateRef = null;
 
   // Synth recipes. `gain` balances loudness between presets (dB).
   const PRESETS = {
@@ -145,6 +167,22 @@
         envelope: { attack: 0.02, decay: 1.8, sustain: 0.1, release: 2 },
       }) },
     },
+    keys: {
+      organ: { gain: -14, make: (T) => new T.PolySynth(T.Synth, {
+        oscillator: { type: 'custom', partials: [1, 0.7, 0.35, 0.18, 0.08] },
+        envelope: { attack: 0.004, decay: 0.12, sustain: 0.35, release: 0.08 },
+      }) },
+      ep: { gain: -11, make: (T) => new T.PolySynth(T.FMSynth, {
+        harmonicity: 1, modulationIndex: 4.5,
+        oscillator: { type: 'sine' }, modulation: { type: 'sine' },
+        envelope: { attack: 0.003, decay: 1.6, sustain: 0.15, release: 0.9 },
+        modulationEnvelope: { attack: 0.002, decay: 0.7, sustain: 0.05, release: 0.5 },
+      }) },
+      pluck: { gain: -12, make: (T) => new T.PolySynth(T.Synth, {
+        oscillator: { type: 'triangle' },
+        envelope: { attack: 0.002, decay: 0.35, sustain: 0, release: 0.3 },
+      }) },
+    },
     pad: {
       stab: { gain: -15, make: (T) => new T.PolySynth(T.Synth, {
         oscillator: { type: 'fatsawtooth', count: 3, spread: 14 },
@@ -181,15 +219,11 @@
     return { length, rate, vel: blank(0), prob: blank(100) };
   }
 
-  function emptyPattern() {
-    return {
-      tracks: {
-        drums: { lanes: Object.fromEntries(DRUM_VOICES.map((v) => [v.id, emptyLane()])) },
-        bass: { length: 16, rate: '1/16', notes: [] },
-        lead: { length: 16, rate: '1/16', notes: [] },
-        pad:  { length: 16, rate: '1/16', notes: [] },
-      },
-    };
+  const emptySynthPart = () => ({ length: 16, rate: '1/16', notes: [] });
+  const emptyDrumPart = () => ({ lanes: Object.fromEntries(DRUM_VOICES.map((v) => [v.id, emptyLane()])) });
+
+  function emptyPattern(trackList = stateRef ? stateRef.tracks : DEFAULT_TRACKS) {
+    return { tracks: Object.fromEntries(trackList.map((t) => [t.id, t.kind === 'drums' ? emptyDrumPart() : emptySynthPart()])) };
   }
 
   // hits: array of steps, or of [step, vel, prob]
@@ -211,7 +245,7 @@
 
   // --- Pattern A: dub techno. Four-on-the-floor anchor, everything else on odd cycles.
   function patternDub() {
-    const p = emptyPattern();
+    const p = emptyPattern(DEFAULT_TRACKS);
     p.tracks.drums.lanes = {
       kick:    lane(16, '1/16', [[0, 112], [4, 102], [8, 108], [12, 100]]),
       congaLo: lane(10, '1/16', euclidHits(3, 10, 1, [74, 58, 66], 90)),
@@ -238,7 +272,7 @@
 
   // --- Pattern B: organic house. Busier hand percussion, moving bass, two 7th chords.
   function patternOrganic() {
-    const p = emptyPattern();
+    const p = emptyPattern(DEFAULT_TRACKS);
     p.tracks.drums.lanes = {
       kick:    lane(16, '1/16', [[0, 110], [4, 100], [8, 106], [12, 100], [14, 60, 40]]),
       congaLo: lane(12, '1/16', euclidHits(5, 12, 0, [82, 60, 70, 55, 66], 95)),
@@ -264,7 +298,7 @@
 
   // --- Pattern C: drift. No backbeat; every lane on its own odd cycle and rate.
   function patternDrift() {
-    const p = emptyPattern();
+    const p = emptyPattern(DEFAULT_TRACKS);
     p.tracks.drums.lanes = {
       kick:    lane(11, '1/8',   [[0, 92], [6, 70, 60]]),
       congaLo: lane(7,  '1/8',   euclidHits(3, 7, 0, [72, 56, 64], 85)),
@@ -281,14 +315,23 @@
     return p;
   }
 
+  // Mixer channel defaults. filter: −1 (low-pass closed) … 0 (open) … +1 (high-pass up).
+  function mixerDefaults(tr) {
+    const base = { vol: 0, pan: 0, mute: false, solo: false, space: 0.2, echo: 0.2, filter: 0, eqLow: 0, eqMid: 0, eqHigh: 0 };
+    if (tr.kind === 'drums') {
+      return { ...base, space: 0.12,
+        echo: { ohh: 0.2, chh: 0.05, shaker: 0, rim: 0.5, snap: 0.35, congaHi: 0.15, congaLo: 0.05, kick: 0 } };
+    }
+    const ty = SYNTH_TYPES[tr.type];
+    return { ...base, preset: ty.presets[0][0], octave: ty.octave, mono: ty.mono };
+  }
+
   function defaultMixer() {
-    return {
-      drums: { vol: 0, mute: false, solo: false, space: 0.12,
-        echo: { ohh: 0.2, chh: 0.05, shaker: 0, rim: 0.5, snap: 0.35, congaHi: 0.15, congaLo: 0.05, kick: 0 } },
-      bass: { vol: 0, mute: false, solo: false, space: 0, echo: 0, preset: 'dub', octave: 1, mono: true },
-      lead: { vol: -2, mute: false, solo: false, space: 0.3, echo: 0.35, preset: 'kalimba', octave: 4, mono: false },
-      pad:  { vol: -1, mute: false, solo: false, space: 0.35, echo: 0.6, preset: 'stab', octave: 3, mono: false },
-    };
+    const m = Object.fromEntries(DEFAULT_TRACKS.map((t) => [t.id, mixerDefaults(t)]));
+    Object.assign(m.bass, { space: 0, echo: 0, pan: 0 });
+    Object.assign(m.lead, { vol: -2, space: 0.3, echo: 0.35, pan: 0.2 });
+    Object.assign(m.pad, { vol: -1, space: 0.35, echo: 0.6, pan: -0.15 });
+    return m;
   }
 
   function defaultMidi() {
@@ -300,13 +343,16 @@
     return {
       version: STATE_VERSION,
       bpm: 120, swing: 0.06, volume: -4, humanize: 0.3,
-      echoTime: '1/8.', echoFeedback: 0.55,
+      echoTime: '1/8.', echoFeedback: 0.55, echoReturn: 0.9, spaceReturn: 1, spaceSize: 7,
       root: 2, scale: 'dorian',
-      current: 0, track: 'drums', voice: 'rim', chord: 'off', laneMode: 'vel',
+      view: 'seq', current: 0, track: 'drums', voice: 'rim', chord: 'off', laneMode: 'vel',
+      songId: null, songName: 'Untitled song', playMode: 'pattern', songLoop: true,
+      arrangement: [{ slot: 0, bars: 8 }, { slot: 1, bars: 8 }, { slot: 2, bars: 4 }, { slot: 0, bars: 8 }],
       exportLength: 'cycle', drumMap: 'gm', splitDrums: false, bakeChance: false,
+      tracks: DEFAULT_TRACKS.map((t) => ({ ...t })),
       midi: defaultMidi(),
       mixer: defaultMixer(),
-      patterns: [patternDub(), patternOrganic(), patternDrift(), emptyPattern()],
+      patterns: [patternDub(), patternOrganic(), patternDrift(), emptyPattern(DEFAULT_TRACKS)],
     };
   }
 
@@ -325,12 +371,31 @@
     return l;
   }
 
-  function normalizePattern(p, fallback) {
+  // Validate a stored track list: drums first, then up to MAX_SYNTHS synth tracks.
+  function normalizeTracks(list) {
+    const out = [{ ...DEFAULT_TRACKS[0] }];
+    if (!Array.isArray(list)) return DEFAULT_TRACKS.map((t) => ({ ...t }));
+    const drums = list.find((t) => t && t.kind === 'drums');
+    if (drums && typeof drums.name === 'string' && drums.name.trim()) out[0].name = drums.name.trim().slice(0, 24);
+    const seen = new Set(['drums']);
+    for (const t of list) {
+      if (!t || t.kind !== 'synth' || !SYNTH_TYPES[t.type] || typeof t.id !== 'string' || seen.has(t.id) || !/^[a-z0-9]{1,12}$/.test(t.id)) continue;
+      if (out.length > MAX_SYNTHS) break;
+      seen.add(t.id);
+      out.push({ id: t.id, kind: 'synth', type: t.type,
+        name: (typeof t.name === 'string' && t.name.trim() ? t.name.trim() : SYNTH_TYPES[t.type].label).slice(0, 24),
+        color: clampInt(t.color, 0, TRACK_COLORS.length - 1, out.length % TRACK_COLORS.length) });
+    }
+    return out;
+  }
+
+  function normalizePattern(p, fallback, trackList) {
     if (!p || typeof p !== 'object' || !p.tracks) return fallback;
-    const out = emptyPattern();
+    const out = emptyPattern(trackList);
     const lanes = p.tracks.drums && p.tracks.drums.lanes;
     if (lanes) for (const v of DRUM_VOICES) out.tracks.drums.lanes[v.id] = normalizeLane(lanes[v.id]);
-    for (const t of MELODIC) {
+    for (const t of trackList) {
+      if (t.kind === 'drums') continue;
       const src = p.tracks[t.id];
       if (!src) continue;
       const dst = out.tracks[t.id];
@@ -346,77 +411,120 @@
     return out;
   }
 
+  // Copy validated globals and mixer settings from `src` into `into` (whose tracks are already set).
   function normalizeGlobals(src, into) {
-    into.bpm = clampInt(src.bpm, 40, 220, into.bpm);
+    into.bpm = clampNum(src.bpm, 40, 220, into.bpm);
     into.swing = clampNum(src.swing, 0, 0.6, into.swing);
     into.volume = clampInt(src.volume, -40, 6, into.volume);
     into.humanize = clampNum(src.humanize, 0, 1, into.humanize);
     if (ECHO_TIMES.some((e) => e.id === src.echoTime)) into.echoTime = src.echoTime;
     into.echoFeedback = clampNum(src.echoFeedback, 0, 0.85, into.echoFeedback);
+    into.echoReturn = clampNum(src.echoReturn, 0, 1.2, into.echoReturn);
+    into.spaceReturn = clampNum(src.spaceReturn, 0, 1.2, into.spaceReturn);
+    into.spaceSize = clampNum(src.spaceSize, 1, 14, into.spaceSize);
     into.root = clampInt(src.root, 0, 11, into.root);
     if (SCALES[src.scale]) into.scale = src.scale;
-    const m = src.mixer;
-    if (!m) return;
-    for (const t of TRACKS) {
+    const m = src.mixer || {};
+    const fresh = {};
+    for (const t of into.tracks) {
+      const d = (into.mixer && into.mixer[t.id]) ? { ...into.mixer[t.id] } : mixerDefaults(t);
+      if (t.kind === 'drums') d.echo = { ...d.echo };
       const s = m[t.id];
-      if (!s) continue;
-      const d = into.mixer[t.id];
-      d.vol = clampInt(s.vol, -30, 6, d.vol);
-      d.mute = !!s.mute;
-      d.solo = !!s.solo;
-      d.space = clampNum(s.space, 0, 1, d.space);
-      if (t.kind === 'drums') {
-        if (s.echo && typeof s.echo === 'object') for (const v of DRUM_VOICES) d.echo[v.id] = clampNum(s.echo[v.id], 0, 1, d.echo[v.id]);
-      } else {
-        d.echo = clampNum(s.echo, 0, 1, d.echo);
-        if (PRESETS[t.id][s.preset]) d.preset = s.preset;
-        d.octave = clampInt(s.octave, 0, 6, d.octave);
-        if (typeof s.mono === 'boolean') d.mono = s.mono;
+      if (s) {
+        d.vol = clampNum(s.vol, -60, 6, d.vol);
+        d.pan = clampNum(s.pan, -1, 1, d.pan);
+        d.mute = !!s.mute;
+        d.solo = !!s.solo;
+        d.space = clampNum(s.space, 0, 1, d.space);
+        d.filter = clampNum(s.filter, -1, 1, d.filter);
+        for (const k of ['eqLow', 'eqMid', 'eqHigh']) d[k] = clampNum(s[k], -24, 12, d[k]);
+        if (t.kind === 'drums') {
+          if (s.echo && typeof s.echo === 'object') for (const v of DRUM_VOICES) d.echo[v.id] = clampNum(s.echo[v.id], 0, 1, d.echo[v.id]);
+        } else {
+          d.echo = clampNum(s.echo, 0, 1, d.echo);
+          if (PRESETS[t.type][s.preset]) d.preset = s.preset;
+          d.octave = clampInt(s.octave, 0, 6, d.octave);
+          if (typeof s.mono === 'boolean') d.mono = s.mono;
+        }
       }
+      fresh[t.id] = d;
     }
+    into.mixer = fresh;
   }
 
-  function loadState() {
+  function normalizeMidi(m, into, trackList) {
+    const d = into;
+    if (m && typeof m === 'object') {
+      d.enabled = !!m.enabled;
+      if (typeof m.inName === 'string') d.inName = m.inName;
+      if (typeof m.outName === 'string') d.outName = m.outName;
+      for (const k of ['follow', 'sendNotes', 'sendClock', 'localAudio']) if (typeof m[k] === 'boolean') d[k] = m[k];
+      d.offset = clampInt(m.offset, -60, 120, 0);
+    }
+    const src = (m && m.channels) || {};
+    const ch = {};
+    for (const t of trackList) ch[t.id] = clampInt(src[t.id], 1, 16, d.channels[t.id] || nextFreeChannel(ch));
+    d.channels = ch;
+  }
+  function nextFreeChannel(used) {
+    const taken = new Set(Object.values(used));
+    for (let c = 1; c <= 16; c++) if (c !== 10 && !taken.has(c)) return c;
+    return 1;
+  }
+
+  // Apply a saved session (localStorage or a share code) on top of defaults.
+  function sessionFrom(saved) {
     const s = defaultState();
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return s;
-      const saved = JSON.parse(raw);
-      if (!saved || saved.version !== STATE_VERSION) return s;
-      normalizeGlobals(saved, s);
-      s.current = clampInt(saved.current, 0, 3, 0);
-      if (TRACK_BY_ID[saved.track]) s.track = saved.track;
-      if (VOICE_BY_ID[saved.voice]) s.voice = saved.voice;
-      if (CHORDS.some((c) => c.id === saved.chord)) s.chord = saved.chord;
-      if (saved.laneMode === 'prob') s.laneMode = 'prob';
-      if (['cycle', '1', '2', '4', '8', '16', '32'].includes(saved.exportLength)) s.exportLength = saved.exportLength;
-      if (saved.drumMap === 'pads') s.drumMap = 'pads';
-      s.splitDrums = !!saved.splitDrums;
-      s.bakeChance = !!saved.bakeChance;
-      if (saved.midi && typeof saved.midi === 'object') {
-        const m = saved.midi;
-        const d = s.midi;
-        d.enabled = !!m.enabled;
-        if (typeof m.inName === 'string') d.inName = m.inName;
-        if (typeof m.outName === 'string') d.outName = m.outName;
-        for (const k of ['follow', 'sendNotes', 'sendClock', 'localAudio']) if (typeof m[k] === 'boolean') d[k] = m[k];
-        d.offset = clampInt(m.offset, -60, 120, 0);
-        if (m.channels) for (const t of TRACKS) d.channels[t.id] = clampInt(m.channels[t.id], 1, 16, d.channels[t.id]);
-      }
-      if (Array.isArray(saved.patterns)) s.patterns = s.patterns.map((d, i) => normalizePattern(saved.patterns[i], d));
-    } catch (e) { /* storage blocked or unreadable: start from the demos */ }
+    if (!saved || (saved.version !== STATE_VERSION && saved.version !== 3)) return null;
+    s.tracks = normalizeTracks(saved.version === 3 ? DEFAULT_TRACKS : saved.tracks);
+    normalizeGlobals(saved, s);
+    s.current = clampInt(saved.current, 0, 3, 0);
+    if (s.tracks.some((t) => t.id === saved.track)) s.track = saved.track;
+    if (VOICE_BY_ID[saved.voice]) s.voice = saved.voice;
+    if (CHORDS.some((c) => c.id === saved.chord)) s.chord = saved.chord;
+    if (saved.laneMode === 'prob') s.laneMode = 'prob';
+    if (saved.view === 'mix') s.view = 'mix';
+    if (['cycle', '1', '2', '4', '8', '16', '32'].includes(saved.exportLength)) s.exportLength = saved.exportLength;
+    if (saved.drumMap === 'pads') s.drumMap = 'pads';
+    s.splitDrums = !!saved.splitDrums;
+    s.bakeChance = !!saved.bakeChance;
+    normalizeMidi(saved.midi, s.midi, s.tracks);
+    if (typeof saved.songName === 'string' && saved.songName.trim()) s.songName = saved.songName.trim().slice(0, 60);
+    s.songId = typeof saved.songId === 'string' && /^[a-z0-9]{4,24}$/.test(saved.songId) ? saved.songId : null;
+    if (saved.playMode === 'song') s.playMode = 'song';
+    if (typeof saved.songLoop === 'boolean') s.songLoop = saved.songLoop;
+    if (Array.isArray(saved.arrangement)) {
+      s.arrangement = saved.arrangement.slice(0, MAX_SECTIONS)
+        .filter((x) => x && Number.isFinite(+x.slot) && Number.isFinite(+x.bars))
+        .map((x) => ({ slot: clampInt(x.slot, 0, 3, 0), bars: clampInt(x.bars, 1, 128, 4) }));
+    }
+    const fallback = (i) => (s.tracks.length === DEFAULT_TRACKS.length ? s.patterns[i] : emptyPattern(s.tracks));
+    s.patterns = [0, 1, 2, 3].map((i) => normalizePattern(Array.isArray(saved.patterns) ? saved.patterns[i] : null, fallback(i), s.tracks));
     return s;
   }
 
-  let saveTimer = 0;
-  function save() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
-    }, 250);
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) { const s = sessionFrom(JSON.parse(raw)); if (s) return s; }
+    } catch (e) { /* storage blocked or unreadable: start from the demos */ }
+    return defaultState();
   }
 
+  let saveTimer = 0;
+  const flushSave = () => {
+    clearTimeout(saveTimer);
+    saveTimer = 0;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+  };
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { flushSave(); updateSongBar(); }, 250);
+  }
+  window.addEventListener('pagehide', () => { if (saveTimer) flushSave(); });
+
   const state = loadState();
+  stateRef = state;
   const pat = () => state.patterns[state.current];
   const scaleSteps = () => SCALES[state.scale].steps;
   const rowCount = () => scaleSteps().length * 2 + 1;
@@ -429,15 +537,15 @@
   const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
   const noteName = (m) => NOTE_NAMES[m % 12] + (Math.floor(m / 12) - 1);
 
-  // All lanes of a pattern as {key, trackId, voice?, length, rate}
+  // All lanes of a pattern as {key, trackId, voice?, lane}
   function lanesOf(p) {
     const out = DRUM_VOICES.map((v) => ({ key: 'drums:' + v.id, trackId: 'drums', voice: v.id, lane: p.tracks.drums.lanes[v.id] }));
-    for (const t of MELODIC) out.push({ key: t.id, trackId: t.id, lane: p.tracks[t.id] });
+    for (const t of state.tracks) if (t.kind === 'synth') out.push({ key: t.id, trackId: t.id, lane: p.tracks[t.id] });
     return out;
   }
 
   function patternHasContent(p) {
-    return DRUM_VOICES.some((v) => p.tracks.drums.lanes[v.id].vel.some(Boolean)) || MELODIC.some((t) => p.tracks[t.id].notes.length);
+    return DRUM_VOICES.some((v) => p.tracks.drums.lanes[v.id].vel.some(Boolean)) || state.tracks.some((t) => t.kind === 'synth' && p.tracks[t.id] && p.tracks[t.id].notes.length);
   }
 
   // ================================================================ audio engine
@@ -480,6 +588,55 @@
     throw new Error('Tone.js could not be loaded from any CDN.');
   }
 
+  // Mixer strip for one track: input → EQ → DJ filter (low-pass + high-pass) → channel
+  // (volume, pan, mute) → master, with a meter and post-fader echo/space sends.
+  function buildStrip(id, withEchoSend) {
+    const input = new T.Gain(1);
+    const eq = new T.EQ3({ low: 0, mid: 0, high: 0, lowFrequency: 250, highFrequency: 3000 });
+    const lp = new T.Filter({ frequency: 20000, type: 'lowpass', rolloff: -24, Q: 1.2 });
+    const hp = new T.Filter({ frequency: 10, type: 'highpass', rolloff: -24, Q: 1.2 });
+    const channel = new T.Channel({ volume: 0, pan: 0 });
+    input.chain(eq, lp, hp, channel, engine.master);
+    const meter = new T.Meter({ smoothing: 0.7 });
+    channel.connect(meter);
+    const spaceSend = new T.Gain(0).connect(engine.spaceIn);
+    channel.connect(spaceSend);
+    let echoSend = null;
+    if (withEchoSend) { echoSend = new T.Gain(0).connect(engine.echoIn); channel.connect(echoSend); }
+    const strip = { input, eq, lp, hp, channel, meter, spaceSend, echoSend, extras: [] };
+    engine.strips[id] = strip;
+    return strip;
+  }
+
+  function disposeStrip(id) {
+    const st = engine && engine.strips[id];
+    if (!st) return;
+    const syn = engine.synths[id];
+    if (syn) safe(() => { syn.releaseAll(); syn.dispose(); });
+    delete engine.synths[id];
+    for (const n of [...st.extras, st.input, st.eq, st.lp, st.hp, st.channel, st.meter, st.spaceSend, st.echoSend]) if (n) safe(() => n.dispose());
+    delete engine.strips[id];
+  }
+
+  // Per-type processing between the synth and the strip.
+  function buildSynthTrack(tr) {
+    const strip = buildStrip(tr.id, true);
+    let head = strip.input;
+    if (tr.type === 'bass') {
+      const lp = new T.Filter({ frequency: 900, type: 'lowpass', rolloff: -24 }).connect(strip.input);
+      strip.extras.push(lp); head = lp;
+    } else if (tr.type === 'pad') {
+      const motion = new T.AutoFilter({ frequency: 0.06, baseFrequency: 260, octaves: 3.6, depth: 0.85,
+        filter: { type: 'lowpass', rolloff: -24, Q: 2.2 }, wet: 1 }).connect(strip.input).start();
+      strip.extras.push(motion); head = motion;
+    } else if (tr.type === 'keys') {
+      const trem = new T.Tremolo({ frequency: 4.5, depth: 0.25, spread: 60, wet: 0.6 }).connect(strip.input).start();
+      strip.extras.push(trem); head = trem;
+    }
+    strip.head = head;
+    setPreset(tr.id);
+  }
+
   function buildEngine() {
     const tr = transport();
     tr.PPQ = PPQ;
@@ -487,40 +644,44 @@
     const master = new T.Volume(state.volume);
     const limiter = new T.Limiter(-1).toDestination();
     const glue = new T.Compressor({ threshold: -18, ratio: 2.5, attack: 0.02, release: 0.25 });
+    const masterMeter = new T.Meter({ smoothing: 0.7 });
     master.chain(glue, limiter);
+    limiter.connect(masterMeter);
 
-    // Dub echo: filtered, tempo-synced feedback delay. Space: long reverb.
+    // Dub echo: filtered, tempo-synced feedback delay. Space: long reverb. Each has a return level.
     const echoIn = new T.Gain(1);
     const echoHp = new T.Filter(280, 'highpass');
     const echo = new T.FeedbackDelay({ delayTime: 0.375, maxDelay: 4, feedback: state.echoFeedback, wet: 1 });
     const echoLp = new T.Filter({ frequency: 2600, type: 'lowpass', Q: 0.8 });
-    const echoOut = new T.Gain(0.9);
+    const echoOut = new T.Gain(state.echoReturn);
+    const echoMeter = new T.Meter({ smoothing: 0.7 });
     echoIn.chain(echoHp, echo, echoLp, echoOut, master);
+    echoOut.connect(echoMeter);
     const spaceIn = new T.Gain(1);
-    const space = new T.Reverb({ decay: 7, preDelay: 0.03, wet: 1 });
-    spaceIn.chain(space, master);
-    echoOut.connect(spaceIn); // echoes bloom into the room a little
+    const space = new T.Reverb({ decay: state.spaceSize, preDelay: 0.03, wet: 1 });
+    const spaceOut = new T.Gain(state.spaceReturn);
+    const spaceMeter = new T.Meter({ smoothing: 0.7 });
+    spaceIn.chain(space, spaceOut, master);
+    spaceOut.connect(spaceMeter);
+    const echoToSpace = new T.Gain(0.25).connect(spaceIn); // echoes bloom into the room a little
+    echoOut.connect(echoToSpace);
 
-    const channels = {};
-    const spaceSends = {};
-    for (const t of TRACKS) {
-      channels[t.id] = new T.Channel({ volume: 0 }).connect(master);
-      spaceSends[t.id] = new T.Gain(0);
-      channels[t.id].connect(spaceSends[t.id]);
-      spaceSends[t.id].connect(spaceIn);
-    }
+    engine = {
+      master, masterMeter, echo, echoIn, echoOut, echoMeter, space, spaceIn, spaceOut, spaceMeter,
+      strips: {}, synths: {}, drums: {}, voiceEcho: {}, drumEchoBus: null,
+    };
 
-    // ---- drums: each voice -> its own out gain -> drums channel, plus an echo send
-    const dc = channels.drums;
+    // ---- drums: each voice -> its own out gain -> drums strip, plus a per-voice echo send
+    const ds = buildStrip('drums', false);
     const drumEchoBus = new T.Gain(1).connect(echoIn);
+    engine.drumEchoBus = drumEchoBus;
     const voiceOut = {};
-    const voiceEcho = {};
     for (const v of DRUM_VOICES) {
-      voiceOut[v.id] = new T.Gain(1).connect(dc);
-      voiceEcho[v.id] = new T.Gain(0).connect(drumEchoBus);
-      voiceOut[v.id].connect(voiceEcho[v.id]);
+      voiceOut[v.id] = new T.Gain(1).connect(ds.input);
+      engine.voiceEcho[v.id] = new T.Gain(0).connect(drumEchoBus);
+      voiceOut[v.id].connect(engine.voiceEcho[v.id]);
     }
-    const d = {};
+    const d = engine.drums;
     d.kick = new T.MembraneSynth({ pitchDecay: 0.06, octaves: 4, oscillator: { type: 'sine' },
       envelope: { attack: 0.002, decay: 0.7, sustain: 0, release: 0.2 } }).connect(voiceOut.kick);
     d.kick.volume.value = -2;
@@ -540,13 +701,11 @@
       envelope: { attack: 0.008, decay: 0.06, sustain: 0, release: 0.03 } }).connect(shakerBp);
     d.shaker.volume.value = -9;
 
-    const hatHp = new T.Filter(7500, 'highpass');
-    const hatSplit = { chh: new T.Gain(1).connect(voiceOut.chh), ohh: new T.Gain(1).connect(voiceOut.ohh) };
     const metal = (decay) => ({ envelope: { attack: 0.001, decay, release: 0.03 },
       harmonicity: 5.1, modulationIndex: 28, resonance: 5200, octaves: 1.4 });
-    d.chh = new T.MetalSynth(metal(0.045)).connect(new T.Filter(7500, 'highpass').connect(hatSplit.chh));
+    d.chh = new T.MetalSynth(metal(0.045)).connect(new T.Filter(7500, 'highpass').connect(voiceOut.chh));
     d.chh.volume.value = -22;
-    d.ohh = new T.MetalSynth(metal(0.45)).connect(hatHp.connect(hatSplit.ohh));
+    d.ohh = new T.MetalSynth(metal(0.45)).connect(new T.Filter(7500, 'highpass').connect(voiceOut.ohh));
     d.ohh.volume.value = -25;
 
     const conga = () => new T.MembraneSynth({ pitchDecay: 0.018, octaves: 1.3,
@@ -556,37 +715,22 @@
     d.congaLo = conga().connect(voiceOut.congaLo);
     d.congaLo.volume.value = -6;
 
-    // ---- melodic chains
-    const bassLp = new T.Filter({ frequency: 900, type: 'lowpass', rolloff: -24 }).connect(channels.bass);
-    const padMotion = new T.AutoFilter({ frequency: 0.06, baseFrequency: 260, octaves: 3.6, depth: 0.85,
-      filter: { type: 'lowpass', rolloff: -24, Q: 2.2 }, wet: 1 }).connect(channels.pad).start();
-
-    const echoSends = {};
-    for (const t of MELODIC) {
-      echoSends[t.id] = new T.Gain(0).connect(echoIn);
-      channels[t.id].connect(echoSends[t.id]);
-    }
-
-    engine = {
-      master, echo, channels, spaceSends, echoSends, voiceEcho, drumEchoBus, drums: d,
-      inputs: { bass: bassLp, lead: channels.lead, pad: padMotion },
-      synths: {},
-    };
-    for (const t of MELODIC) setPreset(t.id);
+    for (const t of state.tracks) if (t.kind === 'synth') buildSynthTrack(t);
     applyGlobals();
     applyMixer();
   }
 
   function setPreset(trackId) {
-    if (!engine) return;
+    if (!engine || !engine.strips[trackId]) return;
+    const tr = state.tracks.find((t) => t.id === trackId);
     const old = engine.synths[trackId];
     if (old) safe(() => { old.releaseAll(); old.dispose(); });
-    const recipes = PRESETS[trackId];
+    const recipes = PRESETS[tr.type];
     const recipe = recipes[state.mixer[trackId].preset] || Object.values(recipes)[0];
     const synth = recipe.make(T);
-    synth.maxPolyphony = trackId === 'pad' ? 32 : 12;
+    synth.maxPolyphony = tr.type === 'pad' ? 32 : 12;
     synth.volume.value = recipe.gain;
-    synth.connect(engine.inputs[trackId]);
+    synth.connect(engine.strips[trackId].head);
     engine.synths[trackId] = synth;
   }
 
@@ -600,19 +744,38 @@
     const et = ECHO_TIMES.find((e) => e.id === state.echoTime) || ECHO_TIMES[2];
     engine.echo.delayTime.rampTo(beatsToSec(et.beats), 0.05);
     engine.echo.feedback.value = state.echoFeedback;
+    engine.echoOut.gain.rampTo(state.echoReturn, 0.05);
+    engine.spaceOut.gain.rampTo(state.spaceReturn, 0.05);
+  }
+
+  // Bipolar DJ filter: −1 closes the low-pass to 200 Hz, +1 raises the high-pass to 6 kHz.
+  function filterFreqs(f) {
+    if (f < -0.01) return { lp: 20000 * Math.pow(0.01, -f), hp: 10 };
+    if (f > 0.01) return { lp: 20000, hp: 20 * Math.pow(300, f) };
+    return { lp: 20000, hp: 10 };
+  }
+
+  function applyStrip(t, anySolo) {
+    const st = engine && engine.strips[t.id];
+    if (!st) return;
+    const m = state.mixer[t.id];
+    st.channel.volume.rampTo(m.vol <= -60 ? -Infinity : m.vol, 0.03);
+    st.channel.pan.rampTo(m.pan, 0.03);
+    st.channel.mute = anySolo ? !m.solo : m.mute;
+    st.eq.low.value = m.eqLow;
+    st.eq.mid.value = m.eqMid;
+    st.eq.high.value = m.eqHigh;
+    const f = filterFreqs(m.filter);
+    st.lp.frequency.rampTo(f.lp, 0.04);
+    st.hp.frequency.rampTo(f.hp, 0.04);
+    st.spaceSend.gain.rampTo(m.space, 0.03);
+    if (st.echoSend) st.echoSend.gain.rampTo(m.echo, 0.03);
   }
 
   function applyMixer() {
     if (!engine) return;
-    const anySolo = TRACKS.some((t) => state.mixer[t.id].solo);
-    for (const t of TRACKS) {
-      const m = state.mixer[t.id];
-      const muted = anySolo ? !m.solo : m.mute;
-      engine.channels[t.id].volume.value = m.vol;
-      engine.channels[t.id].mute = muted;
-      engine.spaceSends[t.id].gain.value = m.space;
-      if (t.kind === 'melodic') engine.echoSends[t.id].gain.value = m.echo;
-    }
+    const anySolo = state.tracks.some((t) => state.mixer[t.id].solo);
+    for (const t of state.tracks) applyStrip(t, anySolo);
     const dm = state.mixer.drums;
     engine.drumEchoBus.gain.value = (anySolo ? !dm.solo : dm.mute) ? 0 : 1;
     for (const v of DRUM_VOICES) engine.voiceEcho[v.id].gain.value = dm.echo[v.id];
@@ -648,13 +811,44 @@
     return [time + Math.random() * h * 0.018, Math.max(0.05, vel * (1 - Math.random() * h * 0.3))];
   }
 
+  // ---- song mode: the arrangement is a list of {slot, bars}; each section restarts its lanes.
+  let songPos = { index: -1, pass: 0 };
+  const songActive = () => state.playMode === 'song' && state.arrangement.length > 0;
+  const songBars = () => state.arrangement.reduce((a, x) => a + x.bars, 0);
+  // Which section a tick falls in, and the tick that section started on (null once a non-looping song ends).
+  function sectionAt(tk) {
+    const total = songBars() * BAR;
+    if (!total) return null;
+    const pass = Math.floor(tk / total);
+    if (pass > 0 && !state.songLoop) return null;
+    let off = tk - pass * total;
+    let start = pass * total;
+    for (let i = 0; i < state.arrangement.length; i++) {
+      const len = state.arrangement[i].bars * BAR;
+      if (off < len) return { index: i, slot: state.arrangement[i].slot, start, pass };
+      off -= len;
+      start += len;
+    }
+    return null;
+  }
+
   // Called every TICK_STEP ticks with the exact audio time of that tick. Internally the
   // Tone Transport drives it (and applies swing); when following MIDI clock, onClockPulse does.
   function tick(time) {
     const tk = masterTick;
     masterTick += TICK_STEP;
     if (following) time += swingOffset(tk);
-    if (queuedSlot !== null && tk % BAR === 0) {
+    if (songActive()) {
+      const sec = sectionAt(tk);
+      if (!sec) { drawer().schedule(() => { if (playing && !following) stopPlayback(); }, time); return; }
+      patStart = sec.start;
+      if (sec.index !== songPos.index || sec.pass !== songPos.pass) {
+        songPos = { index: sec.index, pass: sec.pass };
+        const slotChanged = state.current !== sec.slot;
+        state.current = sec.slot;
+        drawer().schedule(() => { if (slotChanged) renderAll(); else renderSlots(); markArrangement(sec.index); }, time);
+      }
+    } else if (queuedSlot !== null && tk % BAR === 0) {
       state.current = queuedSlot;
       queuedSlot = null;
       patStart = tk;
@@ -687,7 +881,7 @@
           midiNote('drums', drumNote(L.voice), vel, t, 0.06);
         }
       } else {
-        const t = TRACK_BY_ID[L.trackId];
+        const t = TRACK_BY_ID(L.trackId);
         const synth = engine && engine.synths[t.id];
         const stepSec = beatsToSec(tps / PPQ);
         for (const n of L.lane.notes) {
@@ -716,6 +910,7 @@
     const tr = transport();
     masterTick = 0;
     patStart = 0;
+    songPos = { index: -1, pass: 0 };
     if (repeatId === null) repeatId = tr.scheduleRepeat(tick, `${TICK_STEP}i`, 0);
     tr.position = 0;
     tr.start('+0.05');
@@ -728,8 +923,10 @@
     midiPanic();
     playing = false;
     queuedSlot = null;
+    songPos = { index: -1, pass: 0 };
     clearPlayheads();
     renderSlots();
+    markArrangement(-1);
     updatePlayButton();
   }
 
@@ -798,7 +995,7 @@
   }
   function midiPanic() {
     if (!midiOut) return;
-    for (const t of TRACKS) { const ch = channelOf(t.id); try { midiOut.send([0xb0 | ch, 123, 0]); } catch (e) { /* ignore */ } }
+    for (const t of TRACKS()) { const ch = channelOf(t.id); try { midiOut.send([0xb0 | ch, 123, 0]); } catch (e) { /* ignore */ } }
   }
 
   function onMidiMessage(ev) {
@@ -819,6 +1016,7 @@
     ensureAudio().catch(() => {});
     if (playing && !following) transport().stop();
     following = true;
+    songPos = { index: -1, pass: 0 };
     masterTick = Math.round(fromTick / TICK_STEP) * TICK_STEP;
     patStart = 0;
     playing = true;
@@ -936,7 +1134,7 @@
           el('label', { class: 'check' }, el('input', { type: 'checkbox', id: 'midiLocal', checked: midi.localAudio,
             onchange: (e) => { midi.localAudio = e.target.checked; save(); } }), ' Also play built-in sounds'),
           el('div', { class: 'midi-ch' }, el('span', { class: 'field-label', text: 'Channels' }),
-            ...TRACKS.map((t) => el('span', { class: 'field', style: `--tc: var(--c-${t.id})` }, el('label', { for: `ch-${t.id}`, text: t.label }), chSel(t)))))));
+            ...TRACKS().map((t) => el('span', { class: 'field', style: `--tc: ${trackColor(t)}` }, el('label', { for: `ch-${t.id}`, text: t.label }), chSel(t)))))));
     renderMidiStatus();
   }
 
@@ -993,7 +1191,11 @@
     $('#swing').addEventListener('input', (e) => { state.swing = +e.target.value / 100; $('#swingOut').textContent = pct(state.swing); applyGlobals(); save(); });
     $('#humanize').addEventListener('input', (e) => { state.humanize = +e.target.value / 100; $('#humanizeOut').textContent = pct(state.humanize); save(); });
     $('#volume').addEventListener('input', (e) => { state.volume = +e.target.value; applyGlobals(); save(); });
-    $('#echoTime').addEventListener('change', (e) => { state.echoTime = e.target.value; applyGlobals(); save(); });
+    $('#volume').addEventListener('change', () => renderMixer());
+    $('#viewSeq').addEventListener('click', () => setView('seq'));
+    $('#viewMix').addEventListener('click', () => setView('mix'));
+    $('#echoTime').addEventListener('change', (e) => { state.echoTime = e.target.value; applyGlobals(); save(); renderMixer(); });
+    $('#echoFb').addEventListener('change', () => renderMixer());
     $('#echoFb').addEventListener('input', (e) => { state.echoFeedback = +e.target.value / 100; $('#echoFbOut').textContent = pct(state.echoFeedback); applyGlobals(); save(); });
     $('#root').addEventListener('change', (e) => { state.root = +e.target.value; save(); renderEditor(); });
     $('#scale').addEventListener('change', (e) => { state.scale = e.target.value; save(); renderEditor(); renderLanes(); });
@@ -1046,6 +1248,7 @@
   }
 
   function selectSlot(i) {
+    if (playing && songActive()) { flash('The arrangement is choosing patterns. Switch to Loop pattern to pick one by hand.'); return; }
     if (playing) {
       queuedSlot = i === state.current ? null : i;
       renderSlots();
@@ -1054,6 +1257,221 @@
     state.current = i;
     save();
     renderAll();
+  }
+
+  // ================================================================ mixer view
+  // Rotary control: drag up/down (shift for fine), arrow keys, double-click to reset.
+  function knob({ id, label, min, max, step = 0.01, value, def = 0, bipolar = false, format, onInput, title }) {
+    const R = 15;
+    const C = 18;
+    const a0 = -135;
+    const a1 = 135;
+    const polar = (deg) => { const r = (deg - 90) * Math.PI / 180; return [C + R * Math.cos(r), C + R * Math.sin(r)]; };
+    const arc = (from, to) => {
+      if (Math.abs(to - from) < 0.5) return '';
+      const [x0, y0] = polar(Math.min(from, to));
+      const [x1, y1] = polar(Math.max(from, to));
+      const large = Math.abs(to - from) > 180 ? 1 : 0;
+      return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${R} ${R} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+    };
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', '0 0 36 36');
+    svg.setAttribute('aria-hidden', 'true');
+    const track = document.createElementNS(svgNS, 'path');
+    track.setAttribute('d', arc(a0, a1));
+    track.setAttribute('class', 'k-track');
+    const fill = document.createElementNS(svgNS, 'path');
+    fill.setAttribute('class', 'k-fill');
+    const dot = document.createElementNS(svgNS, 'line');
+    dot.setAttribute('class', 'k-dot');
+    svg.append(track, fill, dot);
+    const out = el('span', { class: 'k-val' });
+    const node = el('div', { class: 'knob', id, role: 'slider', tabindex: 0, title: title || label,
+      'aria-label': label, 'aria-valuemin': min, 'aria-valuemax': max }, svg, el('span', { class: 'k-label', text: label }), out);
+    let v = value;
+    const draw = () => {
+      const frac = (v - min) / (max - min);
+      const ang = a0 + frac * (a1 - a0);
+      const zero = bipolar ? a0 + ((0 - min) / (max - min)) * (a1 - a0) : a0;
+      fill.setAttribute('d', arc(zero, ang));
+      const [x, y] = polar(ang);
+      const [ix, iy] = [C + (x - C) * 0.45, C + (y - C) * 0.45];
+      dot.setAttribute('x1', ix.toFixed(2)); dot.setAttribute('y1', iy.toFixed(2));
+      dot.setAttribute('x2', x.toFixed(2)); dot.setAttribute('y2', y.toFixed(2));
+      const txt = format(v);
+      out.textContent = txt;
+      node.setAttribute('aria-valuenow', String(+v.toFixed(3)));
+      node.setAttribute('aria-valuetext', `${label} ${txt}`);
+    };
+    const set = (nv) => {
+      const q = Math.round(Math.min(max, Math.max(min, nv)) / step) * step;
+      if (q === v) return;
+      v = +q.toFixed(4);
+      draw();
+      onInput(v);
+    };
+    let drag = null;
+    node.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      node.focus();
+      drag = { y: e.clientY, v };
+      try { node.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    });
+    node.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const range = (max - min) * (e.shiftKey ? 0.2 : 1);
+      set(drag.v + ((drag.y - e.clientY) / 160) * range);
+    });
+    const end = () => { if (drag) { drag = null; save(); } };
+    node.addEventListener('pointerup', end);
+    node.addEventListener('pointercancel', end);
+    node.addEventListener('dblclick', () => { set(def); save(); });
+    node.addEventListener('keydown', (e) => {
+      const big = (max - min) / 10;
+      const map = { ArrowUp: step, ArrowRight: step, ArrowDown: -step, ArrowLeft: -step, PageUp: big, PageDown: -big };
+      if (e.key in map) { e.preventDefault(); set(v + map[e.key] * (e.shiftKey ? 1 : Math.max(1, Math.round(((max - min) / 100) / step)))); save(); }
+      else if (e.key === 'Home') { e.preventDefault(); set(min); save(); }
+      else if (e.key === 'End') { e.preventDefault(); set(max); save(); }
+      else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); set(def); save(); }
+    });
+    draw();
+    return node;
+  }
+
+  const fmtDb = (v) => (v <= -60 ? '−∞' : `${v > 0 ? '+' : ''}${(Math.round(v * 10) / 10).toFixed(1)}`);
+  const fmtPct = (v) => `${Math.round(v * 100)}`;
+  const fmtPan = (v) => (Math.abs(v) < 0.01 ? 'C' : `${Math.round(Math.abs(v) * 50)}${v < 0 ? 'L' : 'R'}`);
+  const fmtFilter = (v) => {
+    if (Math.abs(v) < 0.01) return 'open';
+    const f = filterFreqs(v);
+    const hz = v < 0 ? f.lp : f.hp;
+    return `${v < 0 ? 'LP' : 'HP'} ${hz >= 1000 ? (hz / 1000).toFixed(1) + 'k' : Math.round(hz)}`;
+  };
+
+  function fader({ id, label, value, onInput }) {
+    const out = el('output', { for: id, class: 'f-val', text: fmtDb(value) });
+    const input = el('input', { id, type: 'range', class: 'fader', min: -60, max: 6, step: 0.5, value, 'aria-label': label,
+      oninput: (e) => { const v = +e.target.value; out.textContent = fmtDb(v); onInput(v); },
+      onchange: () => save(),
+      ondblclick: (e) => { e.target.value = 0; out.textContent = fmtDb(0); onInput(0); save(); } });
+    return { input, out };
+  }
+
+  function stripShell({ key, name, sub, color, cls = '', body, faderEl, meterKey, buttons }) {
+    return el('section', { class: `strip ${cls}`, 'data-strip': key, style: color ? `--tc: ${color}` : null, 'aria-label': `${name} channel` },
+      el('header', { class: 'strip-head' }, el('span', { class: 'strip-name', text: name }), sub ? el('span', { class: 'strip-sub', text: sub }) : null),
+      el('div', { class: 'strip-body' }, ...body),
+      el('div', { class: 'strip-level' },
+        el('div', { class: 'meter', 'data-meter': meterKey, 'aria-hidden': 'true' }, el('i'), el('b')),
+        faderEl.input),
+      faderEl.out,
+      buttons ? el('div', { class: 'strip-btns' }, ...buttons) : null);
+  }
+
+  function renderMixer() {
+    const host = $('#mixer');
+    if (!host || state.view !== 'mix') return;
+    const anySolo = state.tracks.some((t) => state.mixer[t.id].solo);
+    const change = (t, k) => (v) => { state.mixer[t.id][k] = v; if (engine) applyStrip(t, state.tracks.some((x) => state.mixer[x.id].solo)); save(); };
+    const strips = TRACKS().map((t) => {
+      const m = state.mixer[t.id];
+      const knobs = [
+        el('div', { class: 'k-group', role: 'group', 'aria-label': 'EQ' },
+          knob({ id: `eqh-${t.id}`, label: 'High', min: -24, max: 12, step: 0.5, value: m.eqHigh, bipolar: true, format: fmtDb, onInput: change(t, 'eqHigh') }),
+          knob({ id: `eqm-${t.id}`, label: 'Mid', min: -24, max: 12, step: 0.5, value: m.eqMid, bipolar: true, format: fmtDb, onInput: change(t, 'eqMid') }),
+          knob({ id: `eql-${t.id}`, label: 'Low', min: -24, max: 12, step: 0.5, value: m.eqLow, bipolar: true, format: fmtDb, onInput: change(t, 'eqLow') })),
+        knob({ id: `flt-${t.id}`, label: 'Filter', min: -1, max: 1, step: 0.01, value: m.filter, bipolar: true, format: fmtFilter,
+          title: 'Turn left to close a low-pass, right to raise a high-pass', onInput: change(t, 'filter') }),
+        el('div', { class: 'k-group', role: 'group', 'aria-label': 'Sends' },
+          t.kind === 'melodic'
+            ? knob({ id: `echo-${t.id}`, label: 'Echo', min: 0, max: 1, step: 0.01, value: m.echo, format: fmtPct, onInput: change(t, 'echo') })
+            : el('div', { class: 'knob-note', text: 'Echo is set per voice in the sequencer' }),
+          knob({ id: `space-${t.id}`, label: 'Space', min: 0, max: 1, step: 0.01, value: m.space, format: fmtPct, onInput: change(t, 'space') })),
+        knob({ id: `pan-${t.id}`, label: 'Pan', min: -1, max: 1, step: 0.02, value: m.pan, bipolar: true, format: fmtPan, onInput: change(t, 'pan') }),
+      ];
+      const muted = anySolo ? !m.solo : m.mute;
+      return stripShell({
+        key: t.id, name: t.label, sub: t.kind === 'melodic' ? (t.presets.find((x) => x[0] === m.preset) || [0, t.typeLabel])[1] : '8 voices',
+        color: trackColor(t), cls: muted ? 'muted' : '', body: knobs, meterKey: t.id,
+        faderEl: fader({ id: `fader-${t.id}`, label: `${t.label} level`, value: m.vol, onInput: change(t, 'vol') }),
+        buttons: [
+          el('button', { type: 'button', class: 'mute', 'aria-pressed': String(m.mute), text: 'M', title: `Mute ${t.label}`,
+            onclick: () => { m.mute = !m.mute; applyMixer(); save(); renderMixer(); renderTracks(); } }),
+          el('button', { type: 'button', class: 'solo', 'aria-pressed': String(m.solo), text: 'S', title: `Solo ${t.label}`,
+            onclick: () => { m.solo = !m.solo; applyMixer(); save(); renderMixer(); renderTracks(); } }),
+        ],
+      });
+    });
+
+    const echoTime = el('select', { id: 'mixEchoTime', 'aria-label': 'Echo time',
+      onchange: (e) => { state.echoTime = e.target.value; applyGlobals(); syncHeader(); save(); } },
+      ...options(ECHO_TIMES.map((x) => [x.id, x.label]), state.echoTime));
+    const echoStrip = stripShell({
+      key: 'echo', name: 'Echo', sub: 'return', cls: 'ret', meterKey: 'echo',
+      body: [el('label', { class: 'k-label sel-label', for: 'mixEchoTime', text: 'Time' }), echoTime,
+        knob({ id: 'mixEchoFb', label: 'Feedback', min: 0, max: 0.85, step: 0.01, value: state.echoFeedback, def: 0.55, format: fmtPct,
+          onInput: (v) => { state.echoFeedback = v; applyGlobals(); syncHeader(); } })],
+      faderEl: fader({ id: 'fader-echo', label: 'Echo return level', value: gainToDb(state.echoReturn),
+        onInput: (v) => { state.echoReturn = dbToGain(v); applyGlobals(); } }),
+    });
+    const spaceStrip = stripShell({
+      key: 'space', name: 'Space', sub: 'return', cls: 'ret', meterKey: 'space',
+      body: [knob({ id: 'mixSpaceSize', label: 'Size', min: 1, max: 14, step: 0.5, value: state.spaceSize, def: 7, format: (v) => `${v}s`,
+        onInput: (v) => { state.spaceSize = v; if (engine) { clearTimeout(spaceTimer); spaceTimer = setTimeout(() => safe(() => { engine.space.decay = state.spaceSize; }), 250); } } })],
+      faderEl: fader({ id: 'fader-space', label: 'Space return level', value: gainToDb(state.spaceReturn),
+        onInput: (v) => { state.spaceReturn = dbToGain(v); applyGlobals(); } }),
+    });
+    const masterStrip = stripShell({
+      key: 'master', name: 'Master', cls: 'master', meterKey: 'master', body: [],
+      faderEl: fader({ id: 'fader-master', label: 'Master level', value: state.volume,
+        onInput: (v) => { state.volume = v; applyGlobals(); syncHeader(); } }),
+    });
+
+    host.replaceChildren(
+      el('div', { class: 'mixer-scroll' }, el('div', { class: 'mixer-row' }, ...strips, el('div', { class: 'mixer-gap' }), echoStrip, spaceStrip, masterStrip)),
+      el('p', { class: 'hint', text: 'Drag a knob up or down (hold Shift for fine moves); double-click a knob or fader to reset it. The filter closes a low-pass to the left and raises a high-pass to the right.' }));
+    startMeters();
+  }
+  let spaceTimer = 0;
+  const gainToDb = (g) => (g <= 0.001 ? -60 : Math.max(-60, 20 * Math.log10(g)));
+  const dbToGain = (db) => (db <= -60 ? 0 : Math.pow(10, db / 20));
+
+  let meterRaf = 0;
+  function startMeters() {
+    if (meterRaf) return;
+    const tickMeters = () => {
+      meterRaf = 0;
+      if (state.view !== 'mix') return;
+      if (engine) {
+        const read = (node) => { const v = node.getValue(); return Array.isArray(v) ? Math.max(...v) : v; };
+        const pairs = state.tracks.map((t) => [t.id, engine.strips[t.id] && engine.strips[t.id].meter]);
+        pairs.push(['echo', engine.echoMeter], ['space', engine.spaceMeter], ['master', engine.masterMeter]);
+        for (const [key, node] of pairs) {
+          if (!node) continue;
+          const db = read(node);
+          const box = document.querySelector(`[data-meter="${key}"]`);
+          if (!box) continue;
+          const frac = Number.isFinite(db) ? Math.min(1, Math.max(0, (db + 60) / 66)) : 0;
+          box.firstChild.style.height = `${(frac * 100).toFixed(1)}%`;
+          box.classList.toggle('hot', db > -3);
+        }
+      }
+      meterRaf = requestAnimationFrame(tickMeters);
+    };
+    meterRaf = requestAnimationFrame(tickMeters);
+  }
+
+  function setView(v) {
+    state.view = v === 'mix' ? 'mix' : 'seq';
+    const mix = state.view === 'mix';
+    $('#deck').hidden = mix;
+    $('#mixer').hidden = !mix;
+    $('#viewSeq').setAttribute('aria-pressed', String(!mix));
+    $('#viewMix').setAttribute('aria-pressed', String(mix));
+    save();
+    if (mix) renderMixer();
+    else renderEditor();
   }
 
   // ================================================================ track strips
@@ -1083,40 +1501,105 @@
     return `${preset ? preset[1] : ''} · ${tr.length} × ${tr.rate}`;
   }
 
+  let removeArmed = null;   // track id whose remove button is waiting for a second click
+  let removeTimer = 0;
+  let adding = false;       // add-synth type picker open
+
   function renderTracks() {
-    $('#tracks').replaceChildren(...TRACKS.map((t, i) => {
+    const list = TRACKS();
+    const synthCount = list.length - 1;
+    const strips = list.map((t, i) => {
       const m = state.mixer[t.id];
       const sel = state.track === t.id;
-      const controls = [
-        slider({ id: `vol-${t.id}`, label: 'Level', min: -30, max: 6, step: 1, value: m.vol,
-          format: (v) => `${v > 0 ? '+' : ''}${v} dB`, onInput: (v) => { m.vol = v; applyMixer(); save(); } }),
-      ];
-      if (t.kind === 'melodic') {
-        controls.push(slider({ id: `echo-${t.id}`, label: 'Echo', min: 0, max: 100, step: 1, value: Math.round(m.echo * 100),
-          format: (v) => `${v}%`, onInput: (v) => { m.echo = v / 100; applyMixer(); save(); } }));
-      }
-      controls.push(slider({ id: `space-${t.id}`, label: 'Space', min: 0, max: 100, step: 1, value: Math.round(m.space * 100),
-        format: (v) => `${v}%`, onInput: (v) => { m.space = v / 100; applyMixer(); save(); } }));
-
-      return el('div', { class: 'track', 'data-id': t.id, 'data-selected': String(sel), style: `--tc: var(--c-${t.id})` },
+      const armed = removeArmed === t.id;
+      return el('div', { class: 'track', 'data-id': t.id, 'data-selected': String(sel), style: `--tc: ${trackColor(t)}` },
         el('button', { type: 'button', class: 'track-name', 'aria-pressed': String(sel), onclick: () => selectTrack(t.id) },
           el('strong', { text: t.label }), el('span', { class: 'key', text: String(i + 1) }), el('span', { class: 'sub', text: trackSubtitle(t) })),
         el('div', { class: 'track-btns' },
           el('button', { type: 'button', class: 'mute', 'aria-pressed': String(m.mute), title: `Mute ${t.label}`, text: 'M',
-            onclick: () => { m.mute = !m.mute; applyMixer(); save(); renderTracks(); } }),
+            onclick: () => { m.mute = !m.mute; applyMixer(); save(); renderTracks(); renderMixer(); } }),
           el('button', { type: 'button', class: 'solo', 'aria-pressed': String(m.solo), title: `Solo ${t.label}`, text: 'S',
-            onclick: () => { m.solo = !m.solo; applyMixer(); save(); renderTracks(); } })),
-        el('div', { class: 'lane', 'data-lane': t.id, 'aria-hidden': 'true', onclick: () => selectTrack(t.id) }),
-        el('div', { class: 'track-ctrls' }, ...controls));
-    }));
+            onclick: () => { m.solo = !m.solo; applyMixer(); save(); renderTracks(); renderMixer(); } }),
+          t.kind === 'melodic' ? el('button', { type: 'button', class: 'remove' + (armed ? ' armed' : ''),
+            title: armed ? `Click again to remove ${t.label} from every pattern` : `Remove ${t.label}`,
+            'aria-label': armed ? `Confirm removing ${t.label}` : `Remove ${t.label}`,
+            text: armed ? 'Remove?' : '×', onclick: () => armRemove(t.id) }) : null),
+        el('div', { class: 'lane', 'data-lane': t.id, 'aria-hidden': 'true', onclick: () => selectTrack(t.id) }));
+    });
+
+    const full = synthCount >= MAX_SYNTHS;
+    const adder = adding && !full
+      ? el('div', { class: 'add-track open' },
+        el('span', { class: 'field-label', text: 'New synth' }),
+        el('div', { class: 'add-types' }, ...Object.entries(SYNTH_TYPES).map(([id, ty]) =>
+          el('button', { type: 'button', text: ty.label, onclick: () => addTrack(id) }))),
+        el('button', { type: 'button', class: 'add-cancel', text: 'Cancel', onclick: () => { adding = false; renderTracks(); } }))
+      : el('button', { type: 'button', class: 'add-track', disabled: full,
+        text: full ? `${MAX_SYNTHS} synths is the limit` : `+ Add synth (${synthCount} of ${MAX_SYNTHS})`,
+        onclick: () => { adding = true; renderTracks(); } });
+
+    $('#tracks').replaceChildren(...strips, adder);
     renderLanes();
+  }
+
+  function uniqueName(base) {
+    const names = new Set(state.tracks.map((t) => t.name));
+    if (!names.has(base)) return base;
+    for (let n = 2; ; n++) if (!names.has(`${base} ${n}`)) return `${base} ${n}`;
+  }
+
+  function addTrack(type) {
+    if (state.tracks.length - 1 >= MAX_SYNTHS) return;
+    let n = 1;
+    while (state.tracks.some((t) => t.id === `s${n}`)) n++;
+    const usedColors = new Set(state.tracks.map((t) => t.color));
+    const color = TRACK_COLORS.findIndex((_, i) => !usedColors.has(i));
+    const tr = { id: `s${n}`, kind: 'synth', type, name: uniqueName(SYNTH_TYPES[type].label), color: color < 0 ? n % TRACK_COLORS.length : color };
+    state.tracks.push(tr);
+    state.mixer[tr.id] = mixerDefaults(tr);
+    state.midi.channels[tr.id] = nextFreeChannel(state.midi.channels);
+    for (const p of state.patterns) p.tracks[tr.id] = emptySynthPart();
+    if (engine) { buildSynthTrack(tr); applyMixer(); }
+    adding = false;
+    state.track = tr.id;
+    save();
+    renderAll();
+    renderMidi();
+    flash(`Added ${tr.name} on MIDI channel ${state.midi.channels[tr.id]}`);
+  }
+
+  function armRemove(id) {
+    if (removeArmed !== id) {
+      removeArmed = id;
+      clearTimeout(removeTimer);
+      removeTimer = setTimeout(() => { removeArmed = null; renderTracks(); }, 3500);
+      renderTracks();
+      return;
+    }
+    clearTimeout(removeTimer);
+    removeArmed = null;
+    const tr = state.tracks.find((t) => t.id === id);
+    if (!tr || tr.kind === 'drums') return;
+    if (midiOut) { try { midiOut.send([0xb0 | channelOf(id), 123, 0]); } catch (e) { /* ignore */ } }
+    disposeStrip(id);
+    state.tracks = state.tracks.filter((t) => t.id !== id);
+    delete state.mixer[id];
+    delete state.midi.channels[id];
+    for (const p of state.patterns) delete p.tracks[id];
+    delete nowStep[id];
+    if (state.track === id) state.track = 'drums';
+    applyMixer();
+    save();
+    renderAll();
+    renderMidi();
+    flash(`Removed ${tr.name}`);
   }
 
   // Overview strip: for drums one thin row per voice, for melodic one row of note starts.
   function renderLanes() {
     const p = pat();
     const rc = rowCount();
-    for (const t of TRACKS) {
+    for (const t of TRACKS()) {
       const host = document.querySelector(`[data-lane="${t.id}"]`);
       if (!host) continue;
       const rows = t.kind === 'drums'
@@ -1141,14 +1624,19 @@
   const currentLane = () => (state.track === 'drums' ? pat().tracks.drums.lanes[state.voice] : pat().tracks[state.track]);
 
   function renderEditor() {
-    const t = TRACK_BY_ID[state.track];
+    const t = TRACK_BY_ID(state.track);
     const p = pat();
     const m = state.mixer[t.id];
-    $('#editor').style.setProperty('--tc', `var(--c-${t.id})`);
+    $('#editor').style.setProperty('--tc', trackColor(t));
     const L = currentLane();
 
-    const title = el('h2', { class: 'editor-title' }, t.label,
-      el('small', { text: `Pattern ${SLOT_NAMES[state.current]}${t.kind === 'melodic' ? ` · ${NOTE_NAMES[state.root]} ${SCALES[state.scale].label.toLowerCase()}` : ''}` }));
+    const nameInput = el('input', { class: 'name-input', id: 'trackName', value: t.label, maxlength: 24, 'aria-label': 'Track name',
+      size: Math.max(4, t.label.length),
+      oninput: (e) => { e.target.size = Math.max(4, e.target.value.length); },
+      onchange: (e) => { const v = e.target.value.trim().slice(0, 24); const rec = state.tracks.find((x) => x.id === t.id); if (v && rec) { rec.name = v; save(); renderTracks(); renderMixer(); renderExport(); renderMidi(); } else e.target.value = t.label; },
+      onkeydown: (e) => { if (e.key === 'Enter') e.target.blur(); } });
+    const title = el('h2', { class: 'editor-title' }, nameInput,
+      el('small', { text: `${t.kind === 'melodic' ? t.typeLabel + ' · ' : ''}Pattern ${SLOT_NAMES[state.current]}${t.kind === 'melodic' ? ` · ${NOTE_NAMES[state.root]} ${SCALES[state.scale].label.toLowerCase()}` : ''}` }));
 
     const laneLabel = t.kind === 'drums' ? VOICE_BY_ID[state.voice].label : t.label;
     const laneCtl = [
@@ -1211,7 +1699,7 @@
   }
 
   function renderGrid() {
-    const t = TRACK_BY_ID[state.track];
+    const t = TRACK_BY_ID(state.track);
     const p = pat();
     const grid = $('#grid');
     grid.dataset.kind = t.kind;
@@ -1275,7 +1763,7 @@
 
   // Velocity / chance lane for the selected drum voice or melodic track.
   function laneValues() {
-    const t = TRACK_BY_ID[state.track];
+    const t = TRACK_BY_ID(state.track);
     const L = currentLane();
     const key = state.laneMode === 'vel' ? 'vel' : 'prob';
     const vals = [];
@@ -1294,7 +1782,7 @@
     vl.style.setProperty('--steps', cols);
     const vals = laneValues();
     const isVel = state.laneMode === 'vel';
-    const who = state.track === 'drums' ? VOICE_BY_ID[state.voice].label : TRACK_BY_ID[state.track].label;
+    const who = state.track === 'drums' ? VOICE_BY_ID[state.voice].label : TRACK_BY_ID(state.track).label;
     const head = el('div', { class: 'vhead' },
       el('div', { class: 'vtabs', role: 'group', 'aria-label': `${who} lane` },
         el('button', { type: 'button', 'aria-pressed': String(isVel), text: 'Velocity', onclick: () => { state.laneMode = 'vel'; save(); renderVLane(cols); } }),
@@ -1317,6 +1805,13 @@
     renderSlots();
     renderTracks();
     renderEditor();
+    $('#deck').hidden = state.view === 'mix';
+    $('#mixer').hidden = state.view !== 'mix';
+    $('#viewSeq').setAttribute('aria-pressed', String(state.view !== 'mix'));
+    $('#viewMix').setAttribute('aria-pressed', String(state.view === 'mix'));
+    renderMixer();
+    renderArrangement();
+    if (songsOpen) renderSongs(); else updateSongBar();
     renderExport();
   }
 
@@ -1324,7 +1819,7 @@
     renderEditorLite();
     renderLanes();
     renderSlots();
-    for (const t of TRACKS) {
+    for (const t of TRACKS()) {
       const sub = document.querySelector(`.track[data-id="${t.id}"] .sub`);
       if (sub) sub.textContent = trackSubtitle(t);
     }
@@ -1378,7 +1873,7 @@
   let gridCols = {}; // laneKey -> step marked
   function markGrid(key, s) {
     const grid = $('#grid');
-    const t = TRACK_BY_ID[state.track];
+    const t = TRACK_BY_ID(state.track);
     const isThisTrack = t.kind === 'drums' ? key.startsWith('drums:') : key === t.id;
     if (!isThisTrack) return;
     const prev = gridCols[key];
@@ -1462,7 +1957,7 @@
       if (!cell || e.button > 0) return;
       e.preventDefault();
       ensureAudio().catch(() => {});
-      const t = TRACK_BY_ID[state.track];
+      const t = TRACK_BY_ID(state.track);
       const s = +cell.dataset.step;
       try { grid.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
 
@@ -1574,7 +2069,7 @@
       return { cycle: L.length * tps, events };
     }
     const tr = p.tracks[trackId];
-    const t = TRACK_BY_ID[trackId];
+    const t = TRACK_BY_ID(trackId);
     const tps = rateTicks(tr.rate);
     const rc = rowCount();
     const events = tr.notes.filter((n) => n.s < tr.length && n.r < rc).map((n) => ({
@@ -1651,7 +2146,7 @@
     const fixed = state.exportLength === 'cycle' ? 0 : +state.exportLength * BAR;
     const slot = SLOT_NAMES[state.current];
     const clips = [];
-    const tracks = which === 'all' ? TRACKS : [TRACK_BY_ID[which]];
+    const tracks = which === 'all' ? TRACKS() : [TRACK_BY_ID(which)];
     for (const t of tracks) {
       if (t.kind === 'drums') {
         const voices = DRUM_VOICES.filter((v) => p.tracks.drums.lanes[v.id].vel.some((x, i) => x && i < p.tracks.drums.lanes[v.id].length));
@@ -1662,18 +2157,18 @@
             const clip = renderClip([laneEvents(p, 'drums', v.id)], fixed);
             const name = `Polyphemus ${slot} ${v.label}`;
             clips.push({ filename: `polyphemus-${slot}-${slug(v.label)}-${L.length}steps-${slug(L.rate)}-${lengthLabel(clip.length)}.mid`,
-              bytes: writeMidi({ name, channel: 9, ...clip }), capped: clip.capped, label: v.label });
+              bytes: writeMidi({ name, channel: channelOf('drums'), ...clip }), capped: clip.capped, label: v.label });
           }
         } else {
           const clip = renderClip(voices.map((v) => laneEvents(p, 'drums', v.id)), fixed);
           clips.push({ filename: `polyphemus-${slot}-drums-${lengthLabel(clip.length)}.mid`,
-            bytes: writeMidi({ name: `Polyphemus ${slot} Drums`, channel: 9, ...clip }), capped: clip.capped, label: 'Drums' });
+            bytes: writeMidi({ name: `Polyphemus ${slot} ${t.label}`, channel: channelOf('drums'), ...clip }), capped: clip.capped, label: 'Drums' });
         }
       } else {
         if (!p.tracks[t.id].notes.length) continue;
         const clip = renderClip([laneEvents(p, t.id)], fixed);
-        clips.push({ filename: `polyphemus-${slot}-${t.id}-${lengthLabel(clip.length)}.mid`,
-          bytes: writeMidi({ name: `Polyphemus ${slot} ${t.label}`, channel: 0, ...clip }), capped: clip.capped, label: t.label });
+        clips.push({ filename: `polyphemus-${slot}-${slug(t.label) || t.id}-${lengthLabel(clip.length)}.mid`,
+          bytes: writeMidi({ name: `Polyphemus ${slot} ${t.label}`, channel: channelOf(t.id), ...clip }), capped: clip.capped, label: t.label });
       }
     }
     return clips;
@@ -1765,17 +2260,22 @@
     if (!host) return;
     const p = pat();
     const fixed = state.exportLength === 'cycle' ? 0 : +state.exportLength * BAR;
-    const rows = TRACKS.map((t) => {
+    const rows = TRACKS().map((t) => {
       const cyc = cycleTicksOfTrack(p, t.id);
       const full = cyc ? lcm(cyc, BAR) : 0;
       const clipLen = fixed || (full > 64 * BAR ? 64 * BAR : full);
       const empty = !cyc || (t.kind === 'melodic' && !p.tracks[t.id].notes.length);
-      return el('div', { class: 'xrow', style: `--tc: var(--c-${t.id})` },
+      return el('div', { class: 'xrow', style: `--tc: ${trackColor(t)}` },
         el('span', { class: 'xname', text: t.label }),
         el('span', { class: 'xinfo', text: empty ? 'empty' : `cycle ${describeTicks(cyc)} → clip ${describeTicks(clipLen)}` }),
         el('button', { type: 'button', disabled: empty, text: inArtifact() ? 'Download .zip' : 'Download .mid',
           onclick: () => exportClips(t.id) }));
     });
+    const bars = songBars();
+    rows.push(el('div', { class: 'xrow song', style: '--tc: var(--lamp)' },
+      el('span', { class: 'xname', text: 'Whole arrangement' }),
+      el('span', { class: 'xinfo', text: bars ? `${bars} bars, one file per track` : 'no sections' }),
+      el('button', { type: 'button', disabled: !bars, text: 'Download .zip', onclick: exportSong })));
     host.replaceChildren(...rows);
   }
 
@@ -1799,28 +2299,415 @@
     return CODE_PREFIX + btoa(bin);
   }
   function decode(code) {
-    const bin = atob(code.trim().replace(/^PLY3:/, ''));
+    const bin = atob(code.trim().replace(/^PLY[34]:/, ''));
     return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
   }
+  // A code carries the whole session: tracks, mixer, all four patterns, arrangement and settings.
+  // MIDI port settings and the current view belong to this browser, not to the song.
+  function snapshot() {
+    const { midi: _m, view: _v, ...session } = state;
+    return JSON.parse(JSON.stringify(session));
+  }
+
+  // Replace the live session with `next` (already validated by sessionFrom).
+  function applySession(next) {
+    if (playing) stopPlayback();
+    if (engine) for (const t of state.tracks) if (t.kind === 'synth') disposeStrip(t.id);
+    const keepMidi = midi;
+    const keepView = state.view;
+    for (const k of Object.keys(state)) delete state[k];
+    Object.assign(state, next);
+    Object.assign(keepMidi, state.midi);
+    state.midi = keepMidi;
+    state.view = keepView;
+    normalizeMidi(keepMidi, keepMidi, state.tracks);
+    if (engine) { for (const t of state.tracks) if (t.kind === 'synth') buildSynthTrack(t); applyGlobals(); applyMixer(); }
+    save();
+    renderAll();
+    renderMidi();
+  }
+  const sessionFromData = (data) => (data ? sessionFrom({ ...data, midi: state.midi, view: state.view }) : null);
+
   async function copyCode() {
-    const { bpm, swing, volume, humanize, echoTime, echoFeedback, root, scale, mixer } = state;
-    const code = encode({ v: STATE_VERSION, bpm, swing, volume, humanize, echoTime, echoFeedback, root, scale, mixer, pattern: pat() });
+    const code = encode(snapshot());
     const box = $('#code');
     box.value = code;
-    try { await navigator.clipboard.writeText(code); flash('Pattern code copied'); } catch (e) { box.focus(); box.select(); flash('Code selected; copy it with ⌘C or Ctrl+C'); }
+    try { await navigator.clipboard.writeText(code); flash('Session code copied'); } catch (e) { box.focus(); box.select(); flash('Code selected; copy it with ⌘C or Ctrl+C'); }
   }
   function loadCode() {
     const raw = $('#code').value;
-    if (!raw.trim()) { flash('Paste a pattern code into the box first', true); return; }
+    if (!raw.trim()) { flash('Paste a session code into the box first', true); return; }
     let data;
     try { data = decode(raw); } catch (e) { flash('That code could not be read. Check that it was copied in full.', true); return; }
-    if (!data || data.v !== STATE_VERSION || !data.pattern) { flash('That is not a Polyphemus pattern code from this version.', true); return; }
-    normalizeGlobals(data, state);
-    state.patterns[state.current] = normalizePattern(data.pattern, emptyPattern());
-    if (engine) { for (const t of MELODIC) setPreset(t.id); applyGlobals(); applyMixer(); }
+    const next = sessionFromData(data);
+    if (!next) { flash('That is not a Polyphemus session code from this version.', true); return; }
+    next.songId = null; // a pasted code is a new song until it is saved
+    applySession(next);
+    savedJson = null;
+    updateSongBar();
+    flash('Session loaded');
+  }
+
+  // ================================================================ song library (localStorage)
+  const LIB_KEY = 'polyphemus.v2.songs';
+  const FILE_APP = 'polyphemus';
+  let libCache = null;
+  let savedJson = null;        // the song as last saved or opened, for the "unsaved changes" marker
+  let songsOpen = false;
+  let armed = null;            // { action, id } waiting for a confirming second click
+  let armTimer = 0;
+
+  function readLib() {
+    if (libCache) return libCache;
+    let lib = { songs: {} };
+    try {
+      const raw = localStorage.getItem(LIB_KEY);
+      if (raw) { const parsed = JSON.parse(raw); if (parsed && parsed.songs && typeof parsed.songs === 'object') lib = parsed; }
+    } catch (e) { /* unreadable: start empty */ }
+    libCache = lib;
+    return lib;
+  }
+  function writeLib(lib) {
+    try {
+      localStorage.setItem(LIB_KEY, JSON.stringify(lib));
+      libCache = lib;
+      return true;
+    } catch (e) {
+      libCache = null;
+      const full = e && (e.name === 'QuotaExceededError' || e.code === 22);
+      flash(full ? 'Browser storage is full. Delete or download some songs, then save again.' : 'This browser is not letting Polyphemus store songs (private window or blocked site data).', true);
+      return false;
+    }
+  }
+  const newSongId = () => (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)).slice(0, 16);
+  // What counts as a change to the song: everything except its name/id and where you're looking.
+  const songJson = (snap) => {
+    const { songId: _i, songName: _n, current: _c, track: _t, voice: _v, laneMode: _l, playMode: _p, ...rest } = snap;
+    return JSON.stringify(rest);
+  };
+  const isDirty = () => (savedJson === null ? true : songJson(snapshot()) !== savedJson);
+  function markClean() { savedJson = songJson(snapshot()); updateSongBar(); }
+
+  function uniqueSongName(base) {
+    const names = new Set(Object.values(readLib().songs).map((x) => x.name));
+    if (!names.has(base)) return base;
+    for (let n = 2; ; n++) if (!names.has(`${base} ${n}`)) return `${base} ${n}`;
+  }
+
+  function saveSong(asNew) {
+    const lib = readLib();
+    let name = (state.songName || '').trim() || 'Untitled song';
+    const existing = state.songId && lib.songs[state.songId];
+    const id = asNew || !existing ? newSongId() : state.songId;
+    if (asNew && existing && existing.name === name) name = uniqueSongName(`${name} copy`);
+    state.songId = id;
+    state.songName = name;
+    const entry = { id, name, updated: Date.now(), session: snapshot() };
+    if (!writeLib({ songs: { ...lib.songs, [id]: entry } })) return;
+    flushSave();
+    markClean();
+    renderSongs();
+    flash(`Saved “${name}”`);
+  }
+
+  function openSong(id) {
+    const entry = readLib().songs[id];
+    if (!entry) return;
+    const next = sessionFromData(entry.session);
+    if (!next) { flash('That song could not be read.', true); return; }
+    next.songId = id;
+    next.songName = entry.name;
+    applySession(next);
+    markClean();
+    renderSongs();
+    flash(`Opened “${entry.name}”`);
+  }
+
+  function newSong() {
+    const next = defaultState();
+    next.patterns = [0, 1, 2, 3].map(() => emptyPattern(DEFAULT_TRACKS));
+    next.arrangement = [{ slot: 0, bars: 8 }];
+    next.songName = uniqueSongName('Untitled song');
+    next.songId = null;
+    next.bpm = state.bpm;
+    next.root = state.root;
+    next.scale = state.scale;
+    applySession(next);
+    savedJson = null;
+    updateSongBar();
+    renderSongs();
+    flash('New song started');
+  }
+
+  function duplicateSong(id) {
+    const lib = readLib();
+    const src = lib.songs[id];
+    if (!src) return;
+    const nid = newSongId();
+    const name = uniqueSongName(`${src.name} copy`);
+    const copy = { id: nid, name, updated: Date.now(), session: { ...JSON.parse(JSON.stringify(src.session)), songId: nid, songName: name } };
+    if (writeLib({ songs: { ...lib.songs, [nid]: copy } })) { renderSongs(); flash(`Duplicated as “${name}”`); }
+  }
+
+  function deleteSong(id) {
+    const lib = readLib();
+    const src = lib.songs[id];
+    if (!src) return;
+    const songs = { ...lib.songs };
+    delete songs[id];
+    if (!writeLib({ songs })) return;
+    if (state.songId === id) { state.songId = null; savedJson = null; save(); }
+    renderSongs();
+    flash(`Deleted “${src.name}”`);
+  }
+
+  // Two-click confirmation for actions that lose work (the artifact viewer has no confirm()).
+  function confirmThen(action, id, fn) {
+    if (armed && armed.action === action && armed.id === id) {
+      clearTimeout(armTimer);
+      armed = null;
+      fn();
+      return;
+    }
+    armed = { action, id };
+    clearTimeout(armTimer);
+    armTimer = setTimeout(() => { armed = null; renderSongs(); }, 4000);
+    renderSongs();
+  }
+  const isArmed = (action, id) => !!(armed && armed.action === action && armed.id === id);
+
+  // ---- files: one song, or a backup of the whole library, as JSON
+  const download = (filename, text) => offerFile(filename, new Blob([text], { type: 'application/json' }));
+  function downloadSong() {
+    const file = { app: FILE_APP, format: 1, kind: 'song', name: state.songName, saved: new Date().toISOString(), session: snapshot() };
+    download(`${slug(state.songName) || 'song'}.polyphemus.json`, JSON.stringify(file, null, 1));
+  }
+  function downloadLibrary() {
+    const songs = Object.values(readLib().songs);
+    if (!songs.length) { flash('The library is empty. Save a song first.', true); return; }
+    const d = new Date();
+    const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    download(`polyphemus-library-${stamp}.json`, JSON.stringify({ app: FILE_APP, format: 1, kind: 'library', saved: d.toISOString(), songs }));
+  }
+
+  async function openFile(file) {
+    let data;
+    try { data = JSON.parse(await file.text()); } catch (e) { flash('That file is not a Polyphemus song (it is not valid JSON).', true); return; }
+    if (!data || data.app !== FILE_APP) { flash('That file is not a Polyphemus song or library backup.', true); return; }
+    if (data.kind === 'library' && Array.isArray(data.songs)) {
+      const songs = { ...readLib().songs };
+      let added = 0;
+      for (const src of data.songs) {
+        if (!src || !src.session || !sessionFromData(src.session)) continue;
+        const clash = src.id && songs[src.id];
+        if (clash && JSON.stringify(clash.session) === JSON.stringify(src.session)) continue;
+        const id = clash || !src.id || !/^[a-z0-9]{4,24}$/.test(src.id) ? newSongId() : src.id;
+        const name = clash ? uniqueSongName(`${src.name || 'Song'} (restored)`) : String(src.name || 'Untitled song').slice(0, 60);
+        songs[id] = { id, name, updated: Number(src.updated) || Date.now(), session: { ...src.session, songId: id, songName: name } };
+        added++;
+      }
+      if (writeLib({ songs })) { renderSongs(); flash(added ? `Restored ${added} song${added === 1 ? '' : 's'} into the library` : 'Every song in that backup is already in the library'); }
+      return;
+    }
+    if (data.kind === 'song' && data.session) {
+      const next = sessionFromData(data.session);
+      if (!next) { flash('That song file could not be read.', true); return; }
+      next.songId = null;
+      next.songName = String(data.name || next.songName).slice(0, 60);
+      applySession(next);
+      savedJson = null;
+      updateSongBar();
+      renderSongs();
+      flash(`Opened “${next.songName}” from file. Save it to add it to the library.`);
+      return;
+    }
+    flash('That file is not a Polyphemus song or library backup.', true);
+  }
+
+  // ---- song bar (header) and songs panel
+  function updateSongBar() {
+    const name = $('#songName');
+    if (name && document.activeElement !== name) name.value = state.songName;
+    const dot = $('#songDirty');
+    if (dot) {
+      const dirty = isDirty();
+      dot.hidden = !dirty;
+      dot.textContent = state.songId ? 'unsaved changes' : 'not in library';
+    }
+    const b = $('#songsToggle');
+    if (b) b.setAttribute('aria-expanded', String(songsOpen));
+  }
+
+  const fmtDate = (ms) => {
+    const d = new Date(ms);
+    const today = new Date();
+    return d.toDateString() === today.toDateString()
+      ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+      : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+  };
+
+  function renderSongs() {
+    updateSongBar();
+    const host = $('#songs');
+    if (!host) return;
+    host.hidden = !songsOpen;
+    if (!songsOpen) return;
+    const dirty = isDirty();
+    const songs = Object.values(readLib().songs).sort((a, b) => b.updated - a.updated);
+    const fileInput = el('input', { type: 'file', accept: '.json,application/json', id: 'songFile', hidden: true,
+      onchange: (e) => { const f = e.target.files && e.target.files[0]; if (f) openFile(f); e.target.value = ''; } });
+    const actions = el('div', { class: 'songs-actions' },
+      el('button', { type: 'button', class: 'primary', text: state.songId ? 'Save' : 'Save to library', title: 'Save this song (⌘S or Ctrl+S)', onclick: () => saveSong(false) }),
+      state.songId ? el('button', { type: 'button', text: 'Save as new song', onclick: () => saveSong(true) }) : null,
+      el('button', { type: 'button', class: isArmed('new', '') ? 'danger' : '', text: isArmed('new', '') ? 'Discard changes and start new?' : 'New song',
+        onclick: () => (dirty ? confirmThen('new', '', newSong) : newSong()) }),
+      el('span', { class: 'spacer' }),
+      el('button', { type: 'button', text: 'Download song file', onclick: downloadSong }),
+      el('button', { type: 'button', text: 'Open song file…', onclick: () => fileInput.click() }),
+      el('button', { type: 'button', text: 'Back up library', disabled: !songs.length, onclick: downloadLibrary }),
+      fileInput);
+
+    const rows = songs.length ? songs.map((x) => {
+      const cur = x.id === state.songId;
+      const arr = Array.isArray(x.session.arrangement) ? x.session.arrangement : [];
+      const bars = arr.reduce((a, y) => a + (+y.bars || 0), 0);
+      const tracks = Array.isArray(x.session.tracks) ? x.session.tracks.length : 4;
+      const openArmed = isArmed('open', x.id);
+      return el('li', { class: 'song-row' + (cur ? ' current' : '') },
+        el('div', { class: 'song-meta' },
+          el('span', { class: 'song-title', text: x.name }),
+          el('span', { class: 'song-info', text: `${fmtDate(x.updated)} · ${Math.round(x.session.bpm || 120)} BPM · ${tracks} tracks${bars ? ` · ${bars} bars arranged` : ''}` })),
+        el('div', { class: 'song-btns' },
+          (cur && !dirty) ? el('span', { class: 'song-open', text: 'Open now' })
+            : el('button', { type: 'button', class: openArmed ? 'danger' : '',
+              text: openArmed ? (cur ? 'Discard changes?' : 'Discard current changes?') : (cur ? 'Revert to saved' : 'Open'),
+              onclick: () => (dirty ? confirmThen('open', x.id, () => openSong(x.id)) : openSong(x.id)) }),
+          el('button', { type: 'button', text: 'Duplicate', onclick: () => duplicateSong(x.id) }),
+          el('button', { type: 'button', class: isArmed('del', x.id) ? 'danger' : '',
+            'aria-label': isArmed('del', x.id) ? `Confirm deleting ${x.name}` : `Delete ${x.name}`,
+            text: isArmed('del', x.id) ? 'Delete for good?' : 'Delete', onclick: () => confirmThen('del', x.id, () => deleteSong(x.id)) })));
+    }) : [el('li', { class: 'song-empty', text: 'No saved songs yet. Name this one above and choose Save to library.' })];
+
+    let used = 0;
+    try { used = (localStorage.getItem(LIB_KEY) || '').length + (localStorage.getItem(STORAGE_KEY) || '').length; } catch (e) { /* ignore */ }
+    host.replaceChildren(
+      actions,
+      el('ul', { class: 'song-list', 'aria-label': 'Saved songs' }, ...rows),
+      el('p', { class: 'note', text: `Songs are kept in this browser's storage (about ${Math.max(1, Math.round(used / 1024))} KB used of roughly 5 MB). Clearing site data deletes them, so download a backup now and then.` }));
+  }
+
+  // ---- arrangement strip
+  const SLOT_COLORS = ['#e5733f', '#d6ae4a', '#5db3c8', '#a98bdb'];
+  function renderArrangement() {
+    const host = $('#arrange');
+    if (!host) return;
+    const songMode = state.playMode === 'song';
+    const total = songBars();
+    const modeBtns = el('div', { class: 'views mode', role: 'group', 'aria-label': 'Playback' },
+      el('button', { type: 'button', 'aria-pressed': String(!songMode), text: 'Loop pattern', onclick: () => setPlayMode('pattern') }),
+      el('button', { type: 'button', 'aria-pressed': String(songMode), text: 'Play song', onclick: () => setPlayMode('song') }));
+    const blocks = state.arrangement.map((sec, i) => el('li', { class: 'sec', 'data-sec': i, style: `--sc: ${SLOT_COLORS[sec.slot]}` },
+      el('select', { class: 'sec-slot', 'aria-label': `Section ${i + 1} pattern`, onchange: (e) => { sec.slot = +e.target.value; arrangementChanged(); } },
+        ...SLOT_NAMES.map((n, k) => el('option', { value: k, text: n, selected: k === sec.slot }))),
+      el('label', { class: 'sec-bars' },
+        el('input', { type: 'number', min: 1, max: 128, value: sec.bars, inputmode: 'numeric', 'aria-label': `Section ${i + 1} length in bars`,
+          onchange: (e) => { sec.bars = clampInt(e.target.value, 1, 128, sec.bars); arrangementChanged(); } }),
+        el('span', { text: 'bars' })),
+      el('span', { class: 'sec-tools' },
+        el('button', { type: 'button', text: '◀', 'aria-label': `Move section ${i + 1} earlier`, disabled: i === 0,
+          onclick: () => { const a = state.arrangement; [a[i - 1], a[i]] = [a[i], a[i - 1]]; arrangementChanged(); } }),
+        el('button', { type: 'button', text: '×', 'aria-label': `Remove section ${i + 1}`,
+          onclick: () => { state.arrangement.splice(i, 1); arrangementChanged(); } }))));
+    const add = el('li', { class: 'sec-add' },
+      el('button', { type: 'button', disabled: state.arrangement.length >= MAX_SECTIONS, text: '+ Section',
+        onclick: () => {
+          const last = state.arrangement[state.arrangement.length - 1];
+          state.arrangement.push({ slot: last ? (last.slot + 1) % 4 : state.current, bars: last ? last.bars : 8 });
+          arrangementChanged();
+        } }));
+    const secs = (total * 4 * 60) / state.bpm;
+    host.replaceChildren(
+      modeBtns,
+      el('ol', { class: 'sections', 'aria-label': 'Arrangement' }, ...blocks, add),
+      el('div', { class: 'arr-info' },
+        el('span', { text: total ? `${total} bars · ${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')}` : 'no sections' }),
+        el('label', { class: 'check' }, el('input', { type: 'checkbox', id: 'songLoop', checked: state.songLoop,
+          onchange: (e) => { state.songLoop = e.target.checked; save(); } }), ' Loop song')));
+    if (playing && songActive()) markArrangement(songPos.index);
+  }
+
+  function arrangementChanged() {
     save();
-    renderAll();
-    flash(`Loaded into pattern ${SLOT_NAMES[state.current]}`);
+    renderArrangement();
+    renderExport();
+  }
+
+  function setPlayMode(mode) {
+    state.playMode = mode === 'song' ? 'song' : 'pattern';
+    queuedSlot = null;
+    if (playing) {
+      if (state.playMode === 'pattern') patStart = Math.ceil(masterTick / BAR) * BAR;
+      songPos = { index: -1, pass: 0 };
+    }
+    save();
+    renderArrangement();
+    renderSlots();
+    if (state.playMode === 'song' && !state.arrangement.length) flash('Add a section to the arrangement to play a song.');
+  }
+
+  function markArrangement(index) {
+    document.querySelectorAll('#arrange .sec.now').forEach((x) => x.classList.remove('now'));
+    if (index >= 0) { const e = document.querySelector(`#arrange .sec[data-sec="${index}"]`); if (e) e.classList.add('now'); }
+  }
+
+  function initSongs() {
+    $('#songsToggle').addEventListener('click', () => { songsOpen = !songsOpen; renderSongs(); });
+    const name = $('#songName');
+    name.addEventListener('change', () => {
+      const v = name.value.trim().slice(0, 60);
+      if (v) { state.songName = v; save(); updateSongBar(); if (songsOpen) renderSongs(); } else name.value = state.songName;
+    });
+    name.addEventListener('keydown', (e) => { if (e.key === 'Enter') name.blur(); });
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveSong(false); }
+    });
+    // If the autosaved session belongs to a library song, compare against the saved copy.
+    const entry = state.songId && readLib().songs[state.songId];
+    if (entry) {
+      const n = sessionFromData(entry.session);
+      if (n) { const { midi: _m, view: _v, ...r } = n; savedJson = songJson(JSON.parse(JSON.stringify(r))); }
+    } else state.songId = null;
+    updateSongBar();
+  }
+
+  // ---- whole-song MIDI: each section rendered from its pattern, laid end to end
+  function buildSongClips() {
+    const total = songBars() * BAR;
+    if (!total) return [];
+    const base = slug(state.songName) || 'song';
+    const clips = [];
+    for (const t of TRACKS()) {
+      const notes = [];
+      let start = 0;
+      for (const sec of state.arrangement) {
+        const p = state.patterns[sec.slot];
+        const lanes = t.kind === 'drums'
+          ? DRUM_VOICES.filter((v) => { const L = p.tracks.drums.lanes[v.id]; return L.vel.some((x, i) => x && i < L.length); }).map((v) => laneEvents(p, 'drums', v.id))
+          : (p.tracks[t.id] ? [laneEvents(p, t.id)] : []);
+        const clip = renderClip(lanes, sec.bars * BAR);
+        for (const n of clip.notes) notes.push({ ...n, tick: n.tick + start });
+        start += sec.bars * BAR;
+      }
+      if (!notes.length) continue;
+      clips.push({ filename: `${base}-${slug(t.label) || t.id}-${total / BAR}bar.mid`,
+        bytes: writeMidi({ name: `${state.songName} ${t.label}`, channel: channelOf(t.id), length: total, notes }), label: t.label });
+    }
+    return clips;
+  }
+  async function exportSong() {
+    const clips = buildSongClips();
+    if (!clips.length) { flash('Nothing to export: the arrangement is empty or its patterns have no notes.', true); return; }
+    await offerFile(`${slug(state.songName) || 'song'}-arrangement-midi.zip`, makeZip(clips));
   }
 
   // ================================================================ keyboard
@@ -1829,7 +2716,8 @@
       const tag = (e.target.tagName || '').toLowerCase();
       if (['input', 'select', 'textarea'].includes(tag) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
-      else if (/^Digit[1-4]$/.test(e.code)) selectTrack(TRACKS[+e.code.slice(5) - 1].id);
+      else if (/^Digit[1-8]$/.test(e.code)) { const t = state.tracks[+e.code.slice(5) - 1]; if (t) selectTrack(t.id); }
+      else if (e.key === 'm' || e.key === 'M') setView(state.view === 'mix' ? 'seq' : 'mix');
     });
   }
 
@@ -1839,6 +2727,7 @@
   initVLane();
   initExport();
   initKeys();
+  initSongs();
   renderAll();
   renderMidi();
   // Reconnect MIDI silently if it was on last time (Chrome remembers the permission).

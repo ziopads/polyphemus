@@ -18,6 +18,18 @@
       <span class="tagline">polyrhythmic step sequencer</span>
     </div>
 
+    <div class="song-bar">
+      <label for="songName" class="field-label">Song</label>
+      <input id="songName" class="song-name" type="text" maxlength="60" autocomplete="off" spellcheck="false">
+      <span class="song-dirty" id="songDirty" hidden>unsaved changes</span>
+      <button type="button" id="songsToggle" aria-expanded="false" aria-controls="songs">Songs</button>
+    </div>
+
+    <div class="views" role="group" aria-label="View">
+      <button type="button" id="viewSeq" aria-pressed="true">Sequencer</button>
+      <button type="button" id="viewMix" aria-pressed="false">Mixer</button>
+    </div>
+
     <div class="transport">
       <button id="play" class="play" type="button" disabled aria-pressed="false">
         <span class="play-icon" aria-hidden="true"></span><span id="playLabel">Loading sounds…</span>
@@ -61,7 +73,11 @@
     </div>
   </header>
 
-  <main class="deck">
+  <section class="songs" id="songs" aria-label="Song library" hidden></section>
+
+  <section class="arrange" id="arrange" aria-label="Song arrangement"></section>
+
+  <main class="deck" id="deck">
     <nav class="tracks" id="tracks" aria-label="Tracks"></nav>
 
     <section class="editor" id="editor" aria-label="Pattern editor">
@@ -73,6 +89,8 @@
       <p class="hint" id="hint"></p>
     </section>
   </main>
+
+  <section class="mixer" id="mixer" aria-label="Mixer" hidden></section>
 
   <section class="panel midi" aria-labelledby="midiTitle">
     <div class="export-head">
@@ -87,7 +105,7 @@
         <li>In <strong>Audio MIDI Setup</strong>, open Window → Show MIDI Studio, double-click <strong>IAC Driver</strong> and tick "Device is online".</li>
         <li>In Live's <strong>Settings → Link, Tempo &amp; MIDI</strong>, turn on <strong>Sync</strong> for the IAC Driver output (clock to Polyphemus) and <strong>Track</strong> for the IAC Driver input (notes from Polyphemus).</li>
         <li>Here, choose the IAC Driver bus for both Clock in and Out.</li>
-        <li>In Live, create a MIDI track per part: input "IAC Driver", channel 10 for drums (into a Drum Rack), 1 for bass, 2 for lead, 3 for pad, Monitor set to In. Don't route any track's output back to the IAC Driver.</li>
+        <li>In Live, create a MIDI track per Polyphemus track: input "IAC Driver", set to that track's channel (shown above; drums default to 10, into a Drum Rack), Monitor set to In. Don't route any track's output back to the IAC Driver.</li>
         <li>Press Play in Live. Polyphemus answers each clock pulse about 20 ms later (80 ms with its built-in sounds on), so set Live's MIDI Clock Sync Delay for the IAC output to about −20 ms, then fine-tune with the Offset slider here.</li>
       </ol>
     </details>
@@ -109,8 +127,8 @@
   </section>
 
   <details class="share" id="share">
-    <summary>Share or restore a pattern</summary>
-    <p>A pattern code holds the current slot plus tempo, key, and sound settings. Paste one here and choose <strong>Load code</strong> to replace the current slot.</p>
+    <summary>Share or restore a session</summary>
+    <p>A session code holds every track, all four patterns, the mixer, tempo and key. Paste one here and choose <strong>Load code</strong> to replace the current session.</p>
     <textarea id="code" rows="3" spellcheck="false" aria-label="Pattern code"></textarea>
     <div class="share-actions">
       <button type="button" id="copyCode">Copy code</button>
@@ -119,7 +137,7 @@
   </details>
 
   <footer class="foot">
-    <span>Space plays and stops. Keys 1–4 pick a track. Pattern switches wait for the next bar while playing.</span>
+    <span>Space plays and stops. Keys 1–8 pick a track; M switches between sequencer and mixer; ⌘S or Ctrl+S saves the song. Pattern switches wait for the next bar while playing.</span>
     <span>The original 2016 Polyphemus is archived in the repository under <code>v1/</code>.</span>
   </footer>
   <p class="status" id="status" role="status" aria-live="polite"></p>
