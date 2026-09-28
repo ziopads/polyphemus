@@ -318,7 +318,7 @@
   // Mixer channel defaults. filter: −1 (low-pass closed) … 0 (open) … +1 (high-pass up).
   function mixerDefaults(tr) {
     const base = { vol: 0, pan: 0, mute: false, solo: false, space: 0.2, echo: 0.2, filter: 0, eqLow: 0, eqMid: 0, eqHigh: 0,
-      swing: stateRef ? stateRef.swing : 0.06 };
+      swing: stateRef ? stateRef.swing : 54, swingGrid: '16' };
     if (tr.kind === 'drums') {
       return { ...base, space: 0.12,
         echo: { ohh: 0.2, chh: 0.05, shaker: 0, rim: 0.5, snap: 0.35, congaHi: 0.15, congaLo: 0.05, kick: 0 } };
@@ -343,7 +343,7 @@
   function defaultState() {
     return {
       version: STATE_VERSION,
-      bpm: 120, swing: 0.06, volume: -4, humanize: 0.3,
+      bpm: 120, swing: 54, volume: -4, humanize: 0.3,
       echoTime: '1/8.', echoFeedback: 0.55, echoReturn: 0.9, spaceReturn: 1, spaceSize: 7,
       root: 2, scale: 'dorian',
       view: 'seq', current: 0, track: 'drums', voice: 'rim', chord: 'off', laneMode: 'vel',
@@ -412,10 +412,20 @@
     return out;
   }
 
+  // Swing is stored as an MPC-style percentage: where the second 16th of each pair lands,
+  // 50 = straight, 66 = triplet feel, 75 = the MPC's maximum. Sessions saved before this
+  // (0–0.6 amounts on a sine curve) are converted to the percentage with the same offbeat delay.
+  function readSwing(v, fallback) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    if (n < 1) return Math.round(Math.min(75, 50 + (n * 100) / 3));
+    return Math.round(Math.min(75, Math.max(50, n)));
+  }
+
   // Copy validated globals and mixer settings from `src` into `into` (whose tracks are already set).
   function normalizeGlobals(src, into) {
     into.bpm = clampNum(src.bpm, 40, 220, into.bpm);
-    into.swing = clampNum(src.swing, 0, 0.6, into.swing);
+    into.swing = readSwing(src.swing, into.swing);
     into.volume = clampInt(src.volume, -40, 6, into.volume);
     into.humanize = clampNum(src.humanize, 0, 1, into.humanize);
     if (ECHO_TIMES.some((e) => e.id === src.echoTime)) into.echoTime = src.echoTime;
@@ -437,7 +447,8 @@
         d.mute = !!s.mute;
         d.solo = !!s.solo;
         d.space = clampNum(s.space, 0, 1, d.space);
-        d.swing = clampNum(s.swing, 0, 0.6, into.swing);
+        d.swing = readSwing(s.swing, into.swing);
+        if (s.swingGrid === '8' || s.swingGrid === '16') d.swingGrid = s.swingGrid;
         d.filter = clampNum(s.filter, -1, 1, d.filter);
         for (const k of ['eqLow', 'eqMid', 'eqHigh']) d[k] = clampNum(s[k], -24, 12, d[k]);
         if (t.kind === 'drums') {
@@ -870,7 +881,7 @@
       if (rel % tps !== 0) continue;
       const s = (rel / tps) % L.lane.length;
       steps[L.key] = s;
-      const lt = time + swingOffset(tk, state.mixer[L.trackId].swing);
+      const lt = time + swingOffset(tk, state.mixer[L.trackId]);
       if (L.voice) {
         const v = L.lane.vel[s];
         if (v && Math.random() * 100 < L.lane.prob[s]) {
@@ -900,14 +911,16 @@
     if (Object.keys(steps).length) drawer().schedule(() => showPlayheads(steps), time);
   }
 
-  // Swing curve (the same one Tone's Transport uses): notes between the 8th-note grid lines are
-  // pushed later, most at the offbeat 16th, by up to a third of an 8th note at 100%.
-  function swingTicks(tk, amount) {
-    const pair = PPQ / 2; // two 16ths
-    if (!amount || tk % pair === 0) return 0;
-    return (pair / 3) * Math.sin(((tk % pair) / pair) * Math.PI) * amount;
+  // Swing as Roger Linn built it into the LM-1, Linn 9000 and MPC60: within each pair of 16ths
+  // (or 8ths, with the 1/8 grid) only the second note moves, landing at `pct` of the pair.
+  // 50% is straight, 66% a triplet shuffle, 75% the maximum. Notes off that grid (triplets,
+  // odd 32nds) are left alone, as the MPC's quantize would leave them.
+  function swingTicks(tk, pct, grid = '16') {
+    const pair = grid === '8' ? PPQ : PPQ / 2;
+    if (!pct || pct <= 50 || tk % pair !== pair / 2) return 0;
+    return ((pct - 50) / 100) * pair;
   }
-  const swingOffset = (tk, amount) => beatsToSec(swingTicks(tk, amount) / PPQ);
+  const swingOffset = (tk, m) => beatsToSec(swingTicks(tk, m.swing, m.swingGrid) / PPQ);
 
   function startInternal() {
     const tr = transport();
@@ -1193,9 +1206,9 @@
     });
     // The header slider sets every track's swing at once; each track can then be adjusted on its own.
     $('#swing').addEventListener('input', (e) => {
-      state.swing = +e.target.value / 100;
+      state.swing = +e.target.value;
       for (const t of state.tracks) state.mixer[t.id].swing = state.swing;
-      $('#swingOut').textContent = pct(state.swing);
+      $('#swingOut').textContent = `${state.swing}%`;
       save();
     });
     $('#swing').addEventListener('change', () => { renderMixer(); renderEditor(); });
@@ -1228,8 +1241,8 @@
     const vals = state.tracks.map((t) => state.mixer[t.id].swing);
     const same = vals.every((v) => Math.abs(v - vals[0]) < 0.005);
     const avg = vals.reduce((a, v) => a + v, 0) / (vals.length || 1);
-    $('#swing').value = Math.round((same ? vals[0] : avg) * 100);
-    $('#swingOut').textContent = same ? pct(vals[0]) : 'mixed';
+    $('#swing').value = Math.round(same ? vals[0] : avg);
+    $('#swingOut').textContent = same ? `${vals[0]}%` : 'mixed';
     $('#swing').title = same ? 'Swing for every track' : 'Tracks have different swing; moving this sets them all to the same amount';
   }
 
@@ -1408,8 +1421,10 @@
             : el('div', { class: 'knob-note', text: 'Echo is set per voice in the sequencer' }),
           knob({ id: `space-${t.id}`, label: 'Space', min: 0, max: 1, step: 0.01, value: m.space, format: fmtPct, onInput: change(t, 'space') })),
         el('div', { class: 'k-group', role: 'group', 'aria-label': 'Groove and position' },
-          knob({ id: `swing-${t.id}`, label: 'Swing', min: 0, max: 0.6, step: 0.01, value: m.swing, def: state.swing, format: fmtPct,
-            title: 'Delays the offbeat 16ths of this track', onInput: (v) => { m.swing = v; syncSwingAll(); save(); } }),
+          knob({ id: `swing-${t.id}`, label: 'Swing', min: 50, max: 75, step: 1, value: m.swing, def: 50,
+            format: (v) => `${v}%${m.swingGrid === '8' ? ' ⅛' : ''}`,
+            title: `MPC-style swing on ${m.swingGrid === '8' ? '8th' : '16th'} notes: 50% straight, 66% triplet shuffle, 75% maximum`,
+            onInput: (v) => { m.swing = v; syncSwingAll(); save(); } }),
           knob({ id: `pan-${t.id}`, label: 'Pan', min: -1, max: 1, step: 0.02, value: m.pan, bipolar: true, format: fmtPan, onInput: change(t, 'pan') })),
       ];
       const muted = anySolo ? !m.solo : m.mute;
@@ -1645,6 +1660,16 @@
   // ================================================================ editor
   const currentLane = () => (state.track === 'drums' ? pat().tracks.drums.lanes[state.voice] : pat().tracks[state.track]);
 
+  // Swing percentage (MPC-style) plus the grid it applies to.
+  function swingControl(m) {
+    return el('div', { class: 'swing-ctl' },
+      slider({ id: 'trackSwing', label: 'Swing', min: 50, max: 75, step: 1, value: m.swing,
+        format: (v) => `${v}%`, onInput: (v) => { m.swing = v; syncSwingAll(); save(); } }),
+      el('select', { id: 'swingGrid', 'aria-label': 'Swing grid', title: 'Swing the second 16th of each pair, or the second 8th',
+        onchange: (e) => { m.swingGrid = e.target.value; save(); } },
+        ...options([['16', 'on 1/16'], ['8', 'on 1/8']], m.swingGrid || '16')));
+  }
+
   function renderEditor() {
     const t = TRACK_BY_ID(state.track);
     const p = pat();
@@ -1678,8 +1703,7 @@
       const hitsSel = el('select', { id: 'euclidK', 'aria-label': 'Number of hits' },
         ...options(Array.from({ length: L.length + 1 }, (_, i) => [i, `${i} hits`]), Math.min(L.length, Math.max(1, Math.round(L.length * 0.3)))));
       rows1 = [title,
-        slider({ id: 'trackSwing', label: 'Swing', min: 0, max: 60, step: 1, value: Math.round(m.swing * 100),
-          format: (v) => `${v}%`, onInput: (v) => { m.swing = v / 100; syncSwingAll(); save(); } }),
+        swingControl(m),
         el('span', { class: 'spacer' }),
         el('button', { type: 'button', text: 'Clear all drums', onclick: () => clearTrack(t) })];
       rows2 = [
@@ -1709,8 +1733,7 @@
         el('div', { class: 'field' }, el('label', { for: 'chord', text: 'Stamp' }),
           el('select', { id: 'chord', disabled: m.mono, title: m.mono ? 'Turn off Mono to stamp chords' : 'Each click places this chord, built from the scale',
             onchange: (e) => { state.chord = e.target.value; save(); } }, ...options(CHORDS.map((c) => [c.id, c.label]), m.mono ? 'off' : state.chord))),
-        slider({ id: 'trackSwing', label: 'Swing', min: 0, max: 60, step: 1, value: Math.round(m.swing * 100),
-          format: (v) => `${v}%`, onInput: (v) => { m.swing = v / 100; syncSwingAll(); save(); } }),
+        swingControl(m),
         el('span', { class: 'spacer' }),
         el('button', { type: 'button', text: `Clear ${t.label.toLowerCase()}`, onclick: () => clearTrack(t) })];
       rows2 = laneCtl;
@@ -2092,7 +2115,7 @@
       const noteNum = state.drumMap === 'pads' ? v.pad : v.gm;
       const events = [];
       for (let s = 0; s < L.length; s++) if (L.vel[s]) events.push({ tick: s * tps, dur: Math.max(10, Math.round(tps * DRUM_GATE)), note: noteNum, vel: L.vel[s], prob: L.prob[s] });
-      return { cycle: L.length * tps, events, swing: state.mixer.drums.swing };
+      return { cycle: L.length * tps, events, mix: state.mixer.drums };
     }
     const tr = p.tracks[trackId];
     const t = TRACK_BY_ID(trackId);
@@ -2101,7 +2124,7 @@
     const events = tr.notes.filter((n) => n.s < tr.length && n.r < rc).map((n) => ({
       tick: n.s * tps, dur: Math.max(10, Math.round(n.l * tps * t.gate)), note: midiFor(trackId, n.r), vel: n.v, prob: n.p,
     }));
-    return { cycle: tr.length * tps, events, swing: state.mixer[trackId].swing };
+    return { cycle: tr.length * tps, events, mix: state.mixer[trackId] };
   }
 
   function renderClip(lanes, fixedTicks) {
@@ -2119,7 +2142,7 @@
         for (const ev of l.events) {
           let tick = start + ev.tick;
           if (tick >= length) continue;
-          if (state.exportSwing) tick = Math.min(length - 1, tick + Math.round(swingTicks(tick, l.swing || 0)));
+          if (state.exportSwing && l.mix) tick = Math.min(length - 1, tick + Math.round(swingTicks(tick, l.mix.swing, l.mix.swingGrid)));
           let vel = ev.vel;
           if (state.bakeChance) {
             if (Math.random() * 100 >= ev.prob) continue;

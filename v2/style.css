@@ -582,3 +582,6 @@ button.danger { background: #7a2f23; border-color: #b0493a; color: #fff; }
   .brand .wordmark { font-size: 22px; }
   .brand-name { justify-content: flex-start; gap: 10px; }
 }
+
+.swing-ctl { display: inline-flex; align-items: center; gap: 8px; }
+.swing-ctl select { font-size: 13px; padding: 3px 4px; }
