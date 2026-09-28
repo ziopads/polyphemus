@@ -2581,6 +2581,7 @@
       const dirty = isDirty();
       dot.hidden = !dirty;
       dot.textContent = state.songId ? 'unsaved changes' : 'not in library';
+      dot.title = state.songId ? 'This song has unsaved changes' : 'This song is not saved in the library yet';
     }
     const b = $('#songsToggle');
     if (b) b.setAttribute('aria-expanded', String(songsOpen));

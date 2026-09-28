@@ -564,25 +564,17 @@ button.danger { background: #7a2f23; border-color: #b0493a; color: #fff; }
 .emblem { display: block; width: 100%; height: auto; }
 .wordmark-svg { display: block; width: 100%; height: auto; overflow: visible; }
 .wordmark-svg text { font-family: var(--f-display); font-size: 150px; fill: var(--text); }
-.brand-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.brand .tagline { font-size: 12.5px; line-height: 1.2; }
-/* the version is a quiet footnote to the name */
-.brand .ver { font-family: var(--f-mono); font-size: 11px; color: var(--muted); background: none; padding: 0; border-radius: 0; opacity: .8; }
 .bar-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding-top: 6px; }
 .bar-top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
 .bar-main .patterns { margin-left: 0; }
 
 .side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.ink { margin: 0; padding: 0 8px; }
-.ink img { display: block; width: 100%; max-width: 240px; height: auto; margin: 0 auto; opacity: .55; }
-@media (max-width: 900px) { .ink { display: none; } }
 @media (max-width: 640px) {
   .bar { grid-template-columns: 1fr; }
   .brand { width: 100%; aspect-ratio: auto; display: grid; grid-template-columns: 96px 1fr; grid-template-rows: auto auto; column-gap: 14px; align-items: end; padding: 0; }
   .emblem { grid-row: 1 / span 2; }
   .wordmark-svg { grid-column: 2; }
   .wordmark-svg { width: min(100%, 240px); }
-  .brand-foot { justify-content: flex-start; gap: 10px; }
 }
 
 .swing-ctl { display: inline-flex; align-items: center; gap: 8px; }
@@ -591,11 +583,12 @@ button.danger { background: #7a2f23; border-color: #b0493a; color: #fff; }
 /* ---------- compact header (more room for the grid) ---------- */
 .app { padding-block: 12px 28px; gap: 12px; }
 .bar { gap: 8px 18px; padding-bottom: 10px; align-items: center; }
-.brand { width: 100px; gap: 3px; }
-.brand .ver { align-self: flex-end; font-size: 10px; line-height: 1; }
+.brand { width: 128px; gap: 4px; }
 @media (max-width: 1200px) {
   .bar-top .patterns > .field-label { display: none; }
   .song-name { width: 8em; }
+  /* the unsaved marker shrinks to its dot; the words stay in its tooltip */
+  .song-dirty { width: 8px; overflow: hidden; white-space: nowrap; }
 }
 .bar-main { gap: 8px; padding-top: 0; }
 .bar-top { gap: 8px 16px; }
@@ -613,7 +606,7 @@ button.danger { background: #7a2f23; border-color: #b0493a; color: #fff; }
 .track-name { overflow: hidden; }
 .track-name strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9em; flex: none; }
 @media (max-width: 640px) {
-  .brand { width: 100%; grid-template-columns: 72px 1fr; }
-  .brand .ver { grid-column: 2; align-self: start; justify-self: start; }
+  .brand { width: 100%; grid-template-columns: 72px 1fr; column-gap: 16px; align-items: center; }
+  .brand .wordmark-svg { grid-row: 1 / span 2; width: min(100%, 200px); }
   .bar-top .patterns { margin-left: 0; }
 }
