@@ -562,10 +562,12 @@ button.danger { background: #7a2f23; border-color: #b0493a; color: #fff; }
   padding: 0;
 }
 .emblem { display: block; width: 100%; height: auto; }
-.brand-name { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
-.brand .wordmark { font-size: 24px; letter-spacing: .06em; white-space: nowrap; line-height: 1; }
-.brand .ver { font-size: 11px; }
+.wordmark-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.wordmark-svg text { font-family: var(--f-display); font-size: 150px; fill: var(--text); }
+.brand-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .brand .tagline { font-size: 12.5px; line-height: 1.2; }
+/* the version is a quiet footnote to the name */
+.brand .ver { font-family: var(--f-mono); font-size: 11px; color: var(--muted); background: none; padding: 0; border-radius: 0; opacity: .8; }
 .bar-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding-top: 6px; }
 .bar-top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
 .bar-main .patterns { margin-left: 0; }
@@ -578,9 +580,9 @@ button.danger { background: #7a2f23; border-color: #b0493a; color: #fff; }
   .bar { grid-template-columns: 1fr; }
   .brand { width: 100%; aspect-ratio: auto; display: grid; grid-template-columns: 96px 1fr; grid-template-rows: auto auto; column-gap: 14px; align-items: end; padding: 0; }
   .emblem { grid-row: 1 / span 2; }
-  .brand-name, .brand .tagline { grid-column: 2; }
-  .brand .wordmark { font-size: 22px; }
-  .brand-name { justify-content: flex-start; gap: 10px; }
+  .wordmark-svg, .brand-foot { grid-column: 2; }
+  .wordmark-svg { width: min(100%, 240px); }
+  .brand-foot { justify-content: flex-start; gap: 10px; }
 }
 
 .swing-ctl { display: inline-flex; align-items: center; gap: 8px; }
