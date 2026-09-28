@@ -1218,8 +1218,6 @@
     $('#viewSeq').addEventListener('click', () => setView('seq'));
     $('#viewMix').addEventListener('click', () => setView('mix'));
     $('#echoTime').addEventListener('change', (e) => { state.echoTime = e.target.value; applyGlobals(); save(); renderMixer(); });
-    $('#echoFb').addEventListener('change', () => renderMixer());
-    $('#echoFb').addEventListener('input', (e) => { state.echoFeedback = +e.target.value / 100; $('#echoFbOut').textContent = pct(state.echoFeedback); applyGlobals(); save(); });
     $('#root').addEventListener('change', (e) => { state.root = +e.target.value; save(); renderEditor(); });
     $('#scale').addEventListener('change', (e) => { state.scale = e.target.value; save(); renderEditor(); renderLanes(); });
     $('#play').addEventListener('click', togglePlay);
@@ -1253,8 +1251,6 @@
     $('#humanizeOut').textContent = pct(state.humanize);
     $('#volume').value = state.volume;
     $('#echoTime').value = state.echoTime;
-    $('#echoFb').value = Math.round(state.echoFeedback * 100);
-    $('#echoFbOut').textContent = pct(state.echoFeedback);
     $('#root').value = state.root;
     $('#scale').value = state.scale;
   }
@@ -1275,7 +1271,7 @@
       text: name,
       onclick: () => selectSlot(i),
     })));
-    $('#copyTo').replaceChildren(el('option', { value: '', text: `Copy ${SLOT_NAMES[state.current]} to…` }),
+    $('#copyTo').replaceChildren(el('option', { value: '', text: `Copy to…`, title: `Copy pattern ${SLOT_NAMES[state.current]} to another slot` }),
       ...SLOT_NAMES.map((n, i) => (i === state.current ? null : el('option', { value: i, text: `Pattern ${n}` }))).filter(Boolean));
   }
 
@@ -2678,8 +2674,10 @@
           arrangementChanged();
         } }));
     const secs = (total * 4 * 60) / state.bpm;
+    $('#modeToggle').replaceChildren(modeBtns);
+    host.hidden = !songMode;
     host.replaceChildren(
-      modeBtns,
+      el('span', { class: 'field-label', text: 'Arrangement' }),
       el('ol', { class: 'sections', 'aria-label': 'Arrangement' }, ...blocks, add),
       el('div', { class: 'arr-info' },
         el('span', { text: total ? `${total} bars · ${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')}` : 'no sections' }),

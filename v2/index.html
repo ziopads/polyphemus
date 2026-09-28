@@ -13,15 +13,12 @@
 <body>
 <div class="app">
   <header class="bar">
-    <div class="brand">
-      <img class="emblem" src="img/polyphemus-head.png" alt="" width="196" height="160">
+    <div class="brand" title="Polyphemus v2, a polyrhythmic step sequencer">
+      <img class="emblem" src="img/polyphemus-head.png" alt="" width="100" height="82">
       <svg class="wordmark-svg" viewBox="0 -8 1000 112" role="img" aria-label="Polyphemus">
         <text x="0" y="100" textLength="1000" lengthAdjust="spacing" lang="el">ΠΟΛΥΦΗΜΟΣ</text>
       </svg>
-      <div class="brand-foot">
-        <span class="tagline">polyrhythmic step sequencer</span>
-        <span class="ver">v2</span>
-      </div>
+      <span class="ver" title="Polyphemus v2, a polyrhythmic step sequencer">v2</span>
     </div>
 
     <div class="bar-main">
@@ -37,12 +34,19 @@
       <button type="button" id="viewSeq" aria-pressed="true">Sequencer</button>
       <button type="button" id="viewMix" aria-pressed="false">Mixer</button>
     </div>
+
+    <div class="patterns">
+      <span class="field-label" id="patternsLabel">Pattern</span>
+      <div class="slots" id="slots" role="group" aria-labelledby="patternsLabel"></div>
+      <select id="copyTo" aria-label="Copy this pattern to another slot"></select>
+    </div>
     </div>
 
     <div class="transport">
       <button id="play" class="play" type="button" disabled aria-pressed="false">
         <span class="play-icon" aria-hidden="true"></span><span id="playLabel">Loading sounds…</span>
       </button>
+      <div id="modeToggle"></div>
       <div class="field">
         <label for="bpm">Tempo</label>
         <input id="bpm" type="number" min="40" max="220" step="1" inputmode="numeric">
@@ -60,9 +64,7 @@
       </div>
       <div class="field">
         <label for="echoTime">Echo</label>
-        <select id="echoTime" aria-label="Echo time"></select>
-        <input id="echoFb" type="range" min="0" max="85" step="1" aria-label="Echo feedback">
-        <output id="echoFbOut" for="echoFb"></output>
+        <select id="echoTime" aria-label="Echo time" title="Echo time. Feedback and return level are on the Echo strip in the mixer."></select>
       </div>
       <div class="field">
         <label for="root">Key</label>
@@ -75,11 +77,6 @@
       </div>
     </div>
 
-    <div class="patterns">
-      <span class="field-label" id="patternsLabel">Pattern</span>
-      <div class="slots" id="slots" role="group" aria-labelledby="patternsLabel"></div>
-      <select id="copyTo" aria-label="Copy this pattern to another slot"></select>
-    </div>
     </div>
   </header>
 
@@ -154,7 +151,7 @@
 
   <footer class="foot">
     <span>Space plays and stops. Keys 1–8 pick a track; M switches between sequencer and mixer; ⌘S or Ctrl+S saves the song. Pattern switches wait for the next bar while playing.</span>
-    <span>The original 2016 Polyphemus is archived in the repository under <code>v1/</code>.</span>
+    <span>Polyphemus v2, a polyrhythmic step sequencer. The original 2016 version is archived in the repository under <code>v1/</code>.</span>
   </footer>
   <p class="status" id="status" role="status" aria-live="polite"></p>
 </div>
