@@ -317,7 +317,8 @@
 
   // Mixer channel defaults. filter: −1 (low-pass closed) … 0 (open) … +1 (high-pass up).
   function mixerDefaults(tr) {
-    const base = { vol: 0, pan: 0, mute: false, solo: false, space: 0.2, echo: 0.2, filter: 0, eqLow: 0, eqMid: 0, eqHigh: 0 };
+    const base = { vol: 0, pan: 0, mute: false, solo: false, space: 0.2, echo: 0.2, filter: 0, eqLow: 0, eqMid: 0, eqHigh: 0,
+      swing: stateRef ? stateRef.swing : 0.06 };
     if (tr.kind === 'drums') {
       return { ...base, space: 0.12,
         echo: { ohh: 0.2, chh: 0.05, shaker: 0, rim: 0.5, snap: 0.35, congaHi: 0.15, congaLo: 0.05, kick: 0 } };
@@ -348,7 +349,7 @@
       view: 'seq', current: 0, track: 'drums', voice: 'rim', chord: 'off', laneMode: 'vel',
       songId: null, songName: 'Untitled song', playMode: 'pattern', songLoop: true,
       arrangement: [{ slot: 0, bars: 8 }, { slot: 1, bars: 8 }, { slot: 2, bars: 4 }, { slot: 0, bars: 8 }],
-      exportLength: 'cycle', drumMap: 'gm', splitDrums: false, bakeChance: false,
+      exportLength: 'cycle', drumMap: 'gm', splitDrums: false, bakeChance: false, exportSwing: true,
       tracks: DEFAULT_TRACKS.map((t) => ({ ...t })),
       midi: defaultMidi(),
       mixer: defaultMixer(),
@@ -436,6 +437,7 @@
         d.mute = !!s.mute;
         d.solo = !!s.solo;
         d.space = clampNum(s.space, 0, 1, d.space);
+        d.swing = clampNum(s.swing, 0, 0.6, into.swing);
         d.filter = clampNum(s.filter, -1, 1, d.filter);
         for (const k of ['eqLow', 'eqMid', 'eqHigh']) d[k] = clampNum(s[k], -24, 12, d[k]);
         if (t.kind === 'drums') {
@@ -488,6 +490,7 @@
     if (saved.drumMap === 'pads') s.drumMap = 'pads';
     s.splitDrums = !!saved.splitDrums;
     s.bakeChance = !!saved.bakeChance;
+    if (typeof saved.exportSwing === 'boolean') s.exportSwing = saved.exportSwing;
     normalizeMidi(saved.midi, s.midi, s.tracks);
     if (typeof saved.songName === 'string' && saved.songName.trim()) s.songName = saved.songName.trim().slice(0, 60);
     s.songId = typeof saved.songId === 'string' && /^[a-z0-9]{4,24}$/.test(saved.songId) ? saved.songId : null;
@@ -738,8 +741,7 @@
     if (!engine) return;
     const tr = transport();
     tr.bpm.value = state.bpm;
-    tr.swing = state.swing;
-    tr.swingSubdivision = '16n';
+    tr.swing = 0; // swing is applied per track in tick()
     engine.master.volume.value = state.volume;
     const et = ECHO_TIMES.find((e) => e.id === state.echoTime) || ECHO_TIMES[2];
     engine.echo.delayTime.rampTo(beatsToSec(et.beats), 0.05);
@@ -837,7 +839,6 @@
   function tick(time) {
     const tk = masterTick;
     masterTick += TICK_STEP;
-    if (following) time += swingOffset(tk);
     if (songActive()) {
       const sec = sectionAt(tk);
       if (!sec) { drawer().schedule(() => { if (playing && !following) stopPlayback(); }, time); return; }
@@ -869,10 +870,11 @@
       if (rel % tps !== 0) continue;
       const s = (rel / tps) % L.lane.length;
       steps[L.key] = s;
+      const lt = time + swingOffset(tk, state.mixer[L.trackId].swing);
       if (L.voice) {
         const v = L.lane.vel[s];
         if (v && Math.random() * 100 < L.lane.prob[s]) {
-          const [t, vel] = humanized(time, v / 127);
+          const [t, vel] = humanized(lt, v / 127);
           if (local) {
             safe(() => fireDrum(L.voice, t, vel));
             if (L.voice === 'ohh') lastOhhTick = tk;
@@ -887,7 +889,7 @@
         for (const n of L.lane.notes) {
           if (n.s !== s || n.r >= rc) continue;
           if (Math.random() * 100 >= n.p) continue;
-          const [nt, vel] = humanized(time, n.v / 127);
+          const [nt, vel] = humanized(lt, n.v / 127);
           const dur = Math.max(0.03, n.l * stepSec * t.gate - 0.004);
           const m = midiFor(t.id, n.r);
           if (local) safe(() => synth.triggerAttackRelease(mtof(m), dur, nt, vel));
@@ -898,13 +900,14 @@
     if (Object.keys(steps).length) drawer().schedule(() => showPlayheads(steps), time);
   }
 
-  // Tone's swing curve, reproduced for clock-following mode where the Transport isn't running.
-  function swingOffset(tk) {
+  // Swing curve (the same one Tone's Transport uses): notes between the 8th-note grid lines are
+  // pushed later, most at the offbeat 16th, by up to a third of an 8th note at 100%.
+  function swingTicks(tk, amount) {
     const pair = PPQ / 2; // two 16ths
-    if (!state.swing || tk % PPQ === 0 || tk % pair === 0) return 0;
-    const amount = Math.sin(((tk % pair) / pair) * Math.PI) * state.swing;
-    return beatsToSec(pair / 3 / PPQ) * amount;
+    if (!amount || tk % pair === 0) return 0;
+    return (pair / 3) * Math.sin(((tk % pair) / pair) * Math.PI) * amount;
   }
+  const swingOffset = (tk, amount) => beatsToSec(swingTicks(tk, amount) / PPQ);
 
   function startInternal() {
     const tr = transport();
@@ -1188,7 +1191,14 @@
       e.target.value = state.bpm;
       applyGlobals(); save();
     });
-    $('#swing').addEventListener('input', (e) => { state.swing = +e.target.value / 100; $('#swingOut').textContent = pct(state.swing); applyGlobals(); save(); });
+    // The header slider sets every track's swing at once; each track can then be adjusted on its own.
+    $('#swing').addEventListener('input', (e) => {
+      state.swing = +e.target.value / 100;
+      for (const t of state.tracks) state.mixer[t.id].swing = state.swing;
+      $('#swingOut').textContent = pct(state.swing);
+      save();
+    });
+    $('#swing').addEventListener('change', () => { renderMixer(); renderEditor(); });
     $('#humanize').addEventListener('input', (e) => { state.humanize = +e.target.value / 100; $('#humanizeOut').textContent = pct(state.humanize); save(); });
     $('#volume').addEventListener('input', (e) => { state.volume = +e.target.value; applyGlobals(); save(); });
     $('#volume').addEventListener('change', () => renderMixer());
@@ -1213,10 +1223,19 @@
     $('#loadCode').addEventListener('click', loadCode);
   }
 
+  // Header "Swing" shows the shared value, or "mixed" once tracks differ.
+  function syncSwingAll() {
+    const vals = state.tracks.map((t) => state.mixer[t.id].swing);
+    const same = vals.every((v) => Math.abs(v - vals[0]) < 0.005);
+    const avg = vals.reduce((a, v) => a + v, 0) / (vals.length || 1);
+    $('#swing').value = Math.round((same ? vals[0] : avg) * 100);
+    $('#swingOut').textContent = same ? pct(vals[0]) : 'mixed';
+    $('#swing').title = same ? 'Swing for every track' : 'Tracks have different swing; moving this sets them all to the same amount';
+  }
+
   function syncHeader() {
     $('#bpm').value = state.bpm;
-    $('#swing').value = Math.round(state.swing * 100);
-    $('#swingOut').textContent = pct(state.swing);
+    syncSwingAll();
     $('#humanize').value = Math.round(state.humanize * 100);
     $('#humanizeOut').textContent = pct(state.humanize);
     $('#volume').value = state.volume;
@@ -1388,7 +1407,10 @@
             ? knob({ id: `echo-${t.id}`, label: 'Echo', min: 0, max: 1, step: 0.01, value: m.echo, format: fmtPct, onInput: change(t, 'echo') })
             : el('div', { class: 'knob-note', text: 'Echo is set per voice in the sequencer' }),
           knob({ id: `space-${t.id}`, label: 'Space', min: 0, max: 1, step: 0.01, value: m.space, format: fmtPct, onInput: change(t, 'space') })),
-        knob({ id: `pan-${t.id}`, label: 'Pan', min: -1, max: 1, step: 0.02, value: m.pan, bipolar: true, format: fmtPan, onInput: change(t, 'pan') }),
+        el('div', { class: 'k-group', role: 'group', 'aria-label': 'Groove and position' },
+          knob({ id: `swing-${t.id}`, label: 'Swing', min: 0, max: 0.6, step: 0.01, value: m.swing, def: state.swing, format: fmtPct,
+            title: 'Delays the offbeat 16ths of this track', onInput: (v) => { m.swing = v; syncSwingAll(); save(); } }),
+          knob({ id: `pan-${t.id}`, label: 'Pan', min: -1, max: 1, step: 0.02, value: m.pan, bipolar: true, format: fmtPan, onInput: change(t, 'pan') })),
       ];
       const muted = anySolo ? !m.solo : m.mute;
       return stripShell({
@@ -1656,6 +1678,8 @@
       const hitsSel = el('select', { id: 'euclidK', 'aria-label': 'Number of hits' },
         ...options(Array.from({ length: L.length + 1 }, (_, i) => [i, `${i} hits`]), Math.min(L.length, Math.max(1, Math.round(L.length * 0.3)))));
       rows1 = [title,
+        slider({ id: 'trackSwing', label: 'Swing', min: 0, max: 60, step: 1, value: Math.round(m.swing * 100),
+          format: (v) => `${v}%`, onInput: (v) => { m.swing = v / 100; syncSwingAll(); save(); } }),
         el('span', { class: 'spacer' }),
         el('button', { type: 'button', text: 'Clear all drums', onclick: () => clearTrack(t) })];
       rows2 = [
@@ -1685,6 +1709,8 @@
         el('div', { class: 'field' }, el('label', { for: 'chord', text: 'Stamp' }),
           el('select', { id: 'chord', disabled: m.mono, title: m.mono ? 'Turn off Mono to stamp chords' : 'Each click places this chord, built from the scale',
             onchange: (e) => { state.chord = e.target.value; save(); } }, ...options(CHORDS.map((c) => [c.id, c.label]), m.mono ? 'off' : state.chord))),
+        slider({ id: 'trackSwing', label: 'Swing', min: 0, max: 60, step: 1, value: Math.round(m.swing * 100),
+          format: (v) => `${v}%`, onInput: (v) => { m.swing = v / 100; syncSwingAll(); save(); } }),
         el('span', { class: 'spacer' }),
         el('button', { type: 'button', text: `Clear ${t.label.toLowerCase()}`, onclick: () => clearTrack(t) })];
       rows2 = laneCtl;
@@ -2066,7 +2092,7 @@
       const noteNum = state.drumMap === 'pads' ? v.pad : v.gm;
       const events = [];
       for (let s = 0; s < L.length; s++) if (L.vel[s]) events.push({ tick: s * tps, dur: Math.max(10, Math.round(tps * DRUM_GATE)), note: noteNum, vel: L.vel[s], prob: L.prob[s] });
-      return { cycle: L.length * tps, events };
+      return { cycle: L.length * tps, events, swing: state.mixer.drums.swing };
     }
     const tr = p.tracks[trackId];
     const t = TRACK_BY_ID(trackId);
@@ -2075,7 +2101,7 @@
     const events = tr.notes.filter((n) => n.s < tr.length && n.r < rc).map((n) => ({
       tick: n.s * tps, dur: Math.max(10, Math.round(n.l * tps * t.gate)), note: midiFor(trackId, n.r), vel: n.v, prob: n.p,
     }));
-    return { cycle: tr.length * tps, events };
+    return { cycle: tr.length * tps, events, swing: state.mixer[trackId].swing };
   }
 
   function renderClip(lanes, fixedTicks) {
@@ -2093,6 +2119,7 @@
         for (const ev of l.events) {
           let tick = start + ev.tick;
           if (tick >= length) continue;
+          if (state.exportSwing) tick = Math.min(length - 1, tick + Math.round(swingTicks(tick, l.swing || 0)));
           let vel = ev.vel;
           if (state.bakeChance) {
             if (Math.random() * 100 >= ev.prob) continue;
@@ -2284,6 +2311,8 @@
     $('#drumMap').append(...options([['gm', 'General MIDI'], ['pads', 'Drum Rack pads C1–G1']], state.drumMap));
     $('#splitDrums').checked = state.splitDrums;
     $('#bakeChance').checked = state.bakeChance;
+    $('#exportSwing').checked = state.exportSwing;
+    $('#exportSwing').addEventListener('change', (e) => { state.exportSwing = e.target.checked; save(); });
     $('#exportLength').addEventListener('change', (e) => { state.exportLength = e.target.value; save(); renderExport(); });
     $('#drumMap').addEventListener('change', (e) => { state.drumMap = e.target.value; save(); });
     $('#splitDrums').addEventListener('change', (e) => { state.splitDrums = e.target.checked; save(); });

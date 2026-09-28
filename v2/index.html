@@ -14,12 +14,16 @@
 <div class="app">
   <header class="bar">
     <div class="brand">
-      <img class="emblem" src="img/polyphemus-head.png" alt="" width="61" height="40">
-      <span class="wordmark" lang="el">ΠΟΛΥΦΗΜΟΣ</span>
-      <span class="ver">v2</span>
+      <img class="emblem" src="img/polyphemus-head.png" alt="" width="196" height="151">
+      <div class="brand-name">
+        <span class="wordmark" lang="el">ΠΟΛΥΦΗΜΟΣ</span>
+        <span class="ver">v2</span>
+      </div>
       <span class="tagline">polyrhythmic step sequencer</span>
     </div>
 
+    <div class="bar-main">
+    <div class="bar-top">
     <div class="song-bar">
       <label for="songName" class="field-label">Song</label>
       <input id="songName" class="song-name" type="text" maxlength="60" autocomplete="off" spellcheck="false">
@@ -30,6 +34,7 @@
     <div class="views" role="group" aria-label="View">
       <button type="button" id="viewSeq" aria-pressed="true">Sequencer</button>
       <button type="button" id="viewMix" aria-pressed="false">Mixer</button>
+    </div>
     </div>
 
     <div class="transport">
@@ -42,7 +47,7 @@
         <span class="unit">BPM</span>
       </div>
       <div class="field">
-        <label for="swing">Swing</label>
+        <label for="swing" title="Sets every track's swing; adjust tracks one by one in the mixer or editor">Swing</label>
         <input id="swing" type="range" min="0" max="60" step="1">
         <output id="swingOut" for="swing"></output>
       </div>
@@ -72,6 +77,7 @@
       <span class="field-label" id="patternsLabel">Pattern</span>
       <div class="slots" id="slots" role="group" aria-labelledby="patternsLabel"></div>
       <select id="copyTo" aria-label="Copy this pattern to another slot"></select>
+    </div>
     </div>
   </header>
 
@@ -129,6 +135,7 @@
       <div class="field"><label for="drumMap">Drum notes</label><select id="drumMap"></select></div>
       <label class="check"><input type="checkbox" id="splitDrums"> One clip per drum voice</label>
       <label class="check"><input type="checkbox" id="bakeChance"> Bake chance and humanize</label>
+      <label class="check"><input type="checkbox" id="exportSwing"> Include each track's swing</label>
     </div>
     <div class="export-rows" id="exportBody"></div>
   </section>

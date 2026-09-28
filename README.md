@@ -13,7 +13,7 @@ Every drum voice and every melodic track is a lane with its own **length** (1–
 - Bass, lead, pad: piano-roll grids locked to a key and scale; chord stamps (triad, 7th, 9th, sus4, fifths); mono mode for bass lines.
 - Add up to seven synth tracks (bass, lead, pad, keys types), each renamable, with its own sound, lanes, MIDI channel and clip export.
 - Mixer view: per-track fader, pan, mute/solo, level meter, 3-band EQ, a one-knob DJ filter (low-pass left, high-pass right), echo and space sends; echo and space return strips; master strip.
-- Velocity and chance lanes per lane; global humanize.
+- Velocity and chance lanes per lane; global humanize; swing per track (the header Swing sets them all at once), optionally included in MIDI export.
 - Dub echo (tempo-synced, filtered feedback delay) and a reverb "space" send per track.
 - Four pattern slots (A–D) that switch on the next bar while playing; shareable session codes.
 - Songs: the working session autosaves to the browser; a song library (localStorage) keeps named songs you can open, duplicate and delete. Songs and whole-library backups download and open as `.json` files.
