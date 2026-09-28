@@ -8,11 +8,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=GFS+Didot&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/png" href="img/favicon.png">
 </head>
 <body>
 <div class="app">
   <header class="bar">
     <div class="brand">
+      <img class="emblem" src="img/polyphemus-head.png" alt="" width="61" height="40">
       <span class="wordmark" lang="el">ΠΟΛΥΦΗΜΟΣ</span>
       <span class="ver">v2</span>
       <span class="tagline">polyrhythmic step sequencer</span>
@@ -78,7 +80,12 @@
   <section class="arrange" id="arrange" aria-label="Song arrangement"></section>
 
   <main class="deck" id="deck">
-    <nav class="tracks" id="tracks" aria-label="Tracks"></nav>
+    <aside class="side">
+      <nav class="tracks" id="tracks" aria-label="Tracks"></nav>
+      <figure class="ink">
+        <img src="img/polyphemus-ink.png" alt="Polyphemus, an expressionist ink figure with its head thrown back, from the original 2016 Polyphemus" width="365" height="459">
+      </figure>
+    </aside>
 
     <section class="editor" id="editor" aria-label="Pattern editor">
       <div class="editor-bar" id="editorBar"></div>
